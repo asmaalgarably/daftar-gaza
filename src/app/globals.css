@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    direction: rtl;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Luxury Obsidian Background with Ambient Radial Glow */
+.bg-theme-luxury {
+  background-color: #0B0F19;
+  background-image: 
+    radial-gradient(at 50% 0%, rgba(16, 185, 129, 0.07) 0px, transparent 60%),
+    radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.04) 0px, transparent 50%),
+    radial-gradient(at 0% 50%, rgba(245, 158, 11, 0.04) 0px, transparent 50%);
+  background-attachment: fixed;
+}
+
+/* Pristine Day Theme */
+.bg-theme-day {
+  background-color: #F1F5F9;
+  background-image: 
+    radial-gradient(at 50% 0%, rgba(16, 185, 129, 0.08) 0px, transparent 70%),
+    radial-gradient(at 100% 100%, rgba(245, 158, 11, 0.05) 0px, transparent 50%);
+  background-attachment: fixed;
+}
+
+/* Card Elevations & Surface Gradients */
+.card-surface-dark {
+  background: linear-gradient(180deg, rgba(22, 30, 49, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+}
+
+.card-surface-dark:hover {
+  border-color: rgba(16, 185, 129, 0.25);
+  box-shadow: 0 10px 30px -4px rgba(0, 0, 0, 0.6), 0 0 15px -2px rgba(16, 185, 129, 0.1);
+}
+
+.card-surface-light {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 4px 15px -2px rgba(15, 23, 42, 0.05);
+}
+
+.card-surface-light:hover {
+  border-color: #10B981;
+  box-shadow: 0 10px 25px -4px rgba(15, 23, 42, 0.1);
+}
+
+/* Custom Smooth Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.3);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.5);
+}
