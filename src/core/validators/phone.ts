@@ -30,3 +30,21 @@ export function sanitizeAndValidatePalestinianPhone(input: string): string {
 
   return cleaned;
 }
+
+export function validatePalestinianPhone(input: string): {
+  isValid: boolean;
+  normalized?: string;
+  network?: 'جوال (Jawwal)' | 'أوريدو (Ooredoo)';
+  error?: string;
+} {
+  try {
+    const normalized = sanitizeAndValidatePalestinianPhone(input);
+    const network = normalized.startsWith('059') ? 'جوال (Jawwal)' : 'أوريدو (Ooredoo)';
+    return { isValid: true, normalized, network };
+  } catch {
+    return {
+      isValid: false,
+      error: 'يجب أن يبدأ الرقم بـ 059 أو 056 ويتكون من 10 أرقام (مثال: 0599123456)',
+    };
+  }
+}

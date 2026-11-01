@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'دَفْتَر | منصة إدارة ديون وحسابات المحل',
-  description: 'نظام إدارة ديون وحسابات الزبائن المتطور للمحلات ونقاط البيع مع التوثيق المباشر برمز QR.',
+  title: 'دَفْتَر | إدارة ديون وسداد الزبائن',
+  description: 'نظام إدارة وتوثيق ديون وسداد الزبائن لنقاط البيع مع التوثيق المباشر برمز QR.',
   manifest: '/manifest.json',
   icons: {
     apple: '/icon-192.png',

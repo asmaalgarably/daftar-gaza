@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { DaftarLogo } from '@/components/DaftarLogo';
 import { RealQRCode } from '@/components/RealQRCode';
+import { validatePalestinianPhone } from '@/core/validators/phone';
 
 interface CustomerTransaction {
   id: string;
@@ -215,6 +216,18 @@ export default function LuxuryStoreLedgerApp() {
     const amountNum = parseFloat(posAmount);
     if (isNaN(amountNum) || amountNum <= 0 || !selectedCustomer || !posMode) return;
 
+    // Strict Repayment constraint: cannot pay more than the outstanding debt
+    if (posMode === 'REPAYMENT') {
+      if (selectedCustomer.balance <= 0) {
+        triggerToast('حساب الزبون خالص بالفعل ولا توجد ديون مستحقة');
+        return;
+      }
+      if (amountNum > selectedCustomer.balance) {
+        triggerToast(`مبلغ السداد (${amountNum} ₪) أكبر من الدين المستحق (${selectedCustomer.balance} ₪)!`);
+        return;
+      }
+    }
+
     const newTxId = `REC-${Math.floor(100 + Math.random() * 900)}`;
     const txDetails = posDetails || (posMode === 'REPAYMENT' ? 'سداد دفعة نقدية كاش' : 'شراء بضاعة على الحساب');
 
@@ -272,10 +285,30 @@ export default function LuxuryStoreLedgerApp() {
     );
   };
 
-  // Create new customer with INITIAL DEBT
+  // Create new customer with INITIAL DEBT & STRICT PALESTINIAN PHONE VALIDATION
   const handleCreateCustomer = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCustName || !newCustPhone) return;
+    const trimmedName = newCustName.trim();
+    if (!trimmedName || !newCustPhone) {
+      triggerToast('يرجى كتابة اسم الزبون ورقم الجوال');
+      return;
+    }
+
+    // Strict Palestinian phone validation (Jawwal 059 / Ooredoo 056)
+    const phoneCheck = validatePalestinianPhone(newCustPhone);
+    if (!phoneCheck.isValid || !phoneCheck.normalized) {
+      triggerToast(phoneCheck.error || 'رقم جوال غير صالح، يجب أن يبدأ بـ 059 أو 056 ويتكون من 10 أرقام');
+      return;
+    }
+
+    const validatedPhone = phoneCheck.normalized;
+
+    // Check duplicate phone
+    const existing = customers.find((c) => c.phone === validatedPhone);
+    if (existing) {
+      triggerToast(`رقم الجوال مسجل مسبقاً باسم الزبون: ${existing.name}`);
+      return;
+    }
 
     const initialDebtNum = parseFloat(newCustInitialDebt) || 0;
     const initialReason = newCustDebtReason || 'رصيد دين افتتاحي';
@@ -297,8 +330,8 @@ export default function LuxuryStoreLedgerApp() {
 
     const newCust: Customer = {
       id: `cust-${Date.now()}`,
-      name: newCustName,
-      phone: newCustPhone,
+      name: trimmedName,
+      phone: validatedPhone,
       balance: initialDebtNum,
       debtCeiling: parseFloat(newCustCeiling) || 500,
       lastActive: 'الآن (جديد)',
@@ -318,8 +351,8 @@ export default function LuxuryStoreLedgerApp() {
 
     triggerToast(
       initialDebtNum > 0
-        ? `تمت إضافة ${newCustName} برصيد دين ${initialDebtNum} ₪`
-        : `تمت إضافة الزبون ${newCustName} إلى الدفتر`
+        ? `تمت إضافة ${trimmedName} برصيد دين ${initialDebtNum} ₪`
+        : `تمت إضافة الزبون ${trimmedName} إلى الدفتر`
     );
   };
 
@@ -639,13 +672,22 @@ export default function LuxuryStoreLedgerApp() {
                     {/* Settle Debt Button */}
                     <button
                       onClick={() => {
+                        if (selectedCustomer.balance <= 0) {
+                          triggerToast(`حساب الزبون (${selectedCustomer.name}) خالص ولا توجد ديون مستحقة`);
+                          return;
+                        }
                         setPosMode('REPAYMENT');
                         setPosAmount('0');
                       }}
-                      className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
+                      className={`flex-1 sm:flex-none font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-all ${
+                        selectedCustomer.balance <= 0
+                          ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50 shadow-none'
+                          : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                      }`}
+                      title={selectedCustomer.balance <= 0 ? 'الزبون خالص ولا توجد ديون' : 'سداد دفعة من الدين'}
                     >
                       <CreditCard className="w-4 h-4" />
-                      <span>سداد دفعة</span>
+                      <span>{selectedCustomer.balance <= 0 ? 'خالص (0 ₪)' : 'سداد دفعة'}</span>
                     </button>
 
                     {/* Add Debt Button */}
@@ -823,82 +865,135 @@ export default function LuxuryStoreLedgerApp() {
               </button>
             </div>
 
-            {/* Display Screen */}
-            <div className={`p-4 rounded-2xl border text-center ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-              <span className="text-[11px] text-slate-400 block mb-0.5">المبلغ المدخل:</span>
-              <div className="text-4xl font-black font-mono text-white flex items-center justify-center gap-2">
-                <span className={posMode === 'REPAYMENT' ? 'text-emerald-400' : 'text-amber-400'}>{posAmount}</span>
-                <span className="text-lg text-slate-400">₪</span>
-              </div>
-            </div>
+            {/* Display Screen & Live Balance Calculations */}
+            {(() => {
+              const enteredAmount = parseFloat(posAmount) || 0;
+              const isOverpaying = posMode === 'REPAYMENT' && enteredAmount > selectedCustomer.balance;
+              const remainingAfterRepay = Math.max(0, selectedCustomer.balance - enteredAmount);
+              const totalAfterDebt = selectedCustomer.balance + enteredAmount;
+              const exceedsCeiling = posMode === 'DEBT' && totalAfterDebt > selectedCustomer.debtCeiling;
 
-            {/* Quick Amount Chips */}
-            <div className="flex flex-wrap gap-1.5 justify-center">
-              {[10, 20, 50, 100].map((amt) => (
-                <button
-                  key={amt}
-                  onClick={() => setPosAmount(amt.toString())}
-                  className={`font-bold px-3 py-1 rounded-xl text-xs transition-all border ${
-                    isDark ? 'bg-slate-800 border-slate-700 text-slate-200 hover:border-emerald-500' : 'bg-slate-100 border-slate-300 text-slate-800 hover:border-emerald-500'
-                  }`}
-                >
-                  +{amt} ₪
-                </button>
-              ))}
-              {posMode === 'REPAYMENT' && selectedCustomer.balance > 0 && (
-                <button
-                  onClick={() => setPosAmount(selectedCustomer.balance.toString())}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1 rounded-xl text-xs"
-                >
-                  كامل الرصيد ({selectedCustomer.balance} ₪)
-                </button>
-              )}
-            </div>
+              return (
+                <>
+                  <div className={`p-4 rounded-2xl border text-center ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5">
+                      <span>{posMode === 'REPAYMENT' ? 'الدين القائم بذمته حالياً:' : 'الرصيد القائم قبل العملية:'}</span>
+                      <span className="font-bold text-amber-400 font-mono text-sm">{selectedCustomer.balance} ₪</span>
+                    </div>
 
-            {/* Tactile Keypad (LTR standard calculator layout 1,2,3) */}
-            <div dir="ltr" className="grid grid-cols-3 gap-2 text-base font-bold font-mono">
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'CLEAR', '0', 'BACK'].map((key) => (
-                <button
-                  key={key}
-                  onClick={() => handleKeypadPress(key)}
-                  className={`py-3.5 rounded-xl border transition-all active:scale-90 flex items-center justify-center font-bold text-lg ${
-                    key === 'CLEAR'
-                      ? 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30 text-xs font-sans'
-                      : key === 'BACK'
-                      ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 text-xs font-sans'
-                      : isDark
-                      ? 'bg-slate-950 border-slate-800 text-white hover:bg-slate-800'
-                      : 'bg-white border-slate-200 text-slate-900 hover:bg-slate-100 shadow-xs'
-                  }`}
-                >
-                  {key === 'CLEAR' ? 'مسح' : key === 'BACK' ? '⌫ رجوع' : key}
-                </button>
-              ))}
-            </div>
+                    <span className="text-[11px] text-slate-400 block mb-0.5">المبلغ المحدد للعملية:</span>
+                    <div className="text-4xl font-black font-mono flex items-center justify-center gap-2">
+                      <span className={posMode === 'REPAYMENT' ? (isOverpaying ? 'text-red-400' : 'text-emerald-400') : 'text-amber-400'}>
+                        {posAmount}
+                      </span>
+                      <span className="text-lg text-slate-400">₪</span>
+                    </div>
 
-            {/* Note Input */}
-            <input
-              type="text"
-              placeholder="بيان العملية (مثال: طحين، معلبات، كاش...)"
-              value={posDetails}
-              onChange={(e) => setPosDetails(e.target.value)}
-              className={`w-full rounded-xl px-3.5 py-2.5 text-xs outline-none border ${
-                isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
-              }`}
-            />
+                    {/* Dynamic Real-time Calculations & Constraints */}
+                    {posMode === 'REPAYMENT' ? (
+                      isOverpaying ? (
+                        <div className="mt-2.5 p-2 rounded-xl bg-red-500/10 border border-red-500/30 text-center animate-in fade-in">
+                          <span className="text-[11px] font-bold text-red-400 block">
+                            ⚠️ خطأ: مبلغ السداد ({enteredAmount} ₪) يتجاوز الدين المستحق ({selectedCustomer.balance} ₪)! الحد الأقصى للسداد هو {selectedCustomer.balance} ₪ فقط.
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="mt-2.5 flex items-center justify-between text-xs pt-2 border-t border-slate-800/60">
+                          <span className="text-slate-400">المتبقي بذمته بعد السداد:</span>
+                          <span className={`font-bold font-mono ${remainingAfterRepay === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            {remainingAfterRepay} ₪ {remainingAfterRepay === 0 && '(خالص تماماً ✓)'}
+                          </span>
+                        </div>
+                      )
+                    ) : (
+                      <div className="mt-2.5 flex items-center justify-between text-xs pt-2 border-t border-slate-800/60">
+                        <span className="text-slate-400">الرصيد بعد إضافة الدين:</span>
+                        <span className={`font-bold font-mono ${exceedsCeiling ? 'text-red-400' : 'text-amber-400'}`}>
+                          {totalAfterDebt} ₪ {exceedsCeiling && '(تجاوز السقف!)'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
 
-            {/* Confirm Button */}
-            <button
-              onClick={handleExecutePosTransaction}
-              className={`w-full py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 ${
-                posMode === 'REPAYMENT'
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/25'
-                  : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/25'
-              }`}
-            >
-              <CheckCircle2 className="w-5 h-5" />
-              <span>تأكيد واستخراج كود QR المباشر</span>
-            </button>
+                  {/* Quick Amount Chips */}
+                  <div className="flex flex-wrap gap-1.5 justify-center">
+                    {[10, 20, 50, 100]
+                      .filter((amt) => posMode !== 'REPAYMENT' || amt <= selectedCustomer.balance)
+                      .map((amt) => (
+                        <button
+                          key={amt}
+                          onClick={() => setPosAmount(amt.toString())}
+                          className={`font-bold px-3 py-1 rounded-xl text-xs transition-all border ${
+                            isDark ? 'bg-slate-800 border-slate-700 text-slate-200 hover:border-emerald-500' : 'bg-slate-100 border-slate-300 text-slate-800 hover:border-emerald-500'
+                          }`}
+                        >
+                          +{amt} ₪
+                        </button>
+                      ))}
+                    {posMode === 'REPAYMENT' && selectedCustomer.balance > 0 && (
+                      <button
+                        onClick={() => setPosAmount(selectedCustomer.balance.toString())}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1 rounded-xl text-xs"
+                      >
+                        سداد كامل الدين ({selectedCustomer.balance} ₪)
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Tactile Keypad */}
+                  <div dir="ltr" className="grid grid-cols-3 gap-2 text-base font-bold font-mono">
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'CLEAR', '0', 'BACK'].map((key) => (
+                      <button
+                        key={key}
+                        onClick={() => handleKeypadPress(key)}
+                        className={`py-3.5 rounded-xl border transition-all active:scale-90 flex items-center justify-center font-bold text-lg ${
+                          key === 'CLEAR'
+                            ? 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30 text-xs font-sans'
+                            : key === 'BACK'
+                            ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 text-xs font-sans'
+                            : isDark
+                            ? 'bg-slate-950 border-slate-800 text-white hover:bg-slate-800'
+                            : 'bg-white border-slate-200 text-slate-900 hover:bg-slate-100 shadow-xs'
+                        }`}
+                      >
+                        {key === 'CLEAR' ? 'مسح' : key === 'BACK' ? '⌫ رجوع' : key}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Note Input */}
+                  <input
+                    type="text"
+                    placeholder="بيان العملية (مثال: طحين، معلبات، كاش...)"
+                    value={posDetails}
+                    onChange={(e) => setPosDetails(e.target.value)}
+                    className={`w-full rounded-xl px-3.5 py-2.5 text-xs outline-none border ${
+                      isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                    }`}
+                  />
+
+                  {/* Confirm Button */}
+                  <button
+                    onClick={handleExecutePosTransaction}
+                    disabled={enteredAmount <= 0 || isOverpaying}
+                    className={`w-full py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
+                      enteredAmount <= 0 || isOverpaying
+                        ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50 shadow-none'
+                        : posMode === 'REPAYMENT'
+                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/25 active:scale-95'
+                        : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/25 active:scale-95'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span>
+                      {isOverpaying
+                        ? `غير مسموح بسداد أكثر من الدين (${selectedCustomer.balance} ₪)`
+                        : 'تأكيد واستخراج كود QR المباشر'}
+                    </span>
+                  </button>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -1026,17 +1121,62 @@ export default function LuxuryStoreLedgerApp() {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-400 mb-1 block">رقم الجوال (جوال / أوريدو)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-400">رقم الجوال (جوال 059 / أوريدو 056)</label>
+                  {(() => {
+                    if (!newCustPhone) return null;
+                    const check = validatePalestinianPhone(newCustPhone);
+                    if (check.isValid) {
+                      return (
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-500/20">
+                          <Check className="w-3 h-3" />
+                          {check.network}
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
+                        رقم غير مكتمل
+                      </span>
+                    );
+                  })()}
+                </div>
                 <input
                   type="tel"
                   required
-                  placeholder="059xxxxxxx أو 056xxxxxxx"
+                  placeholder="مثال: 0599123456 أو 0568123456"
                   value={newCustPhone}
                   onChange={(e) => setNewCustPhone(e.target.value)}
-                  className={`w-full rounded-xl px-3.5 py-2.5 text-sm outline-none font-mono border ${
-                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                  className={`w-full rounded-xl px-3.5 py-2.5 text-sm outline-none font-mono border transition-all ${
+                    newCustPhone.length > 0 && !validatePalestinianPhone(newCustPhone).isValid
+                      ? 'border-red-500/60 bg-red-500/5 focus:border-red-500 text-red-200'
+                      : isDark
+                      ? 'bg-slate-950 border-slate-800 text-white focus:border-emerald-500'
+                      : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-emerald-500'
                   }`}
                 />
+                {(() => {
+                  if (!newCustPhone) return null;
+                  const check = validatePalestinianPhone(newCustPhone);
+                  if (!check.isValid) {
+                    return (
+                      <p className="text-[11px] text-red-400 mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        {check.error}
+                      </p>
+                    );
+                  }
+                  const duplicate = customers.find((c) => c.phone === check.normalized);
+                  if (duplicate) {
+                    return (
+                      <p className="text-[11px] text-amber-400 mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        هذا الرقم مسجل مسبقاً باسم: {duplicate.name}
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
 
               {/* Initial Debt Field */}
@@ -1089,9 +1229,20 @@ export default function LuxuryStoreLedgerApp() {
               <div className="flex gap-2.5 mt-2">
                 <button
                   type="submit"
-                  className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl text-xs transition-all shadow-md shadow-amber-500/20"
+                  disabled={
+                    !newCustName.trim() ||
+                    !validatePalestinianPhone(newCustPhone).isValid ||
+                    !!customers.find((c) => c.phone === validatePalestinianPhone(newCustPhone).normalized)
+                  }
+                  className={`flex-1 font-black py-2.5 rounded-xl text-xs transition-all shadow-md ${
+                    !newCustName.trim() ||
+                    !validatePalestinianPhone(newCustPhone).isValid ||
+                    !!customers.find((c) => c.phone === validatePalestinianPhone(newCustPhone).normalized)
+                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50 shadow-none'
+                      : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20 active:scale-95'
+                  }`}
                 >
-                  حفظ وتسجيل الزبون كمديون
+                  حفظ وتسجيل الزبون بالدفتر
                 </button>
                 <button
                   type="button"
