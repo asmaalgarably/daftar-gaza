@@ -33,7 +33,6 @@ import {
   UserPlus,
   BookOpen,
   Trash2,
-  Volume2,
 } from 'lucide-react';
 import { DaftarLogo } from '@/components/DaftarLogo';
 import { RealQRCode } from '@/components/RealQRCode';
@@ -133,8 +132,7 @@ export default function LuxuryStoreLedgerApp() {
       if (selectedCustomerId === customerId) {
         setSelectedCustomerId(updated.length > 0 ? updated[0].id : null);
       }
-      playKeypadClick();
-      triggerToast(`تم حذف حساب الزبون (${customerName}) بنجاح! 🗑️`);
+      triggerToast(`تم حذف حساب الزبون (${customerName}) بنجاح`);
     }
   };
 
@@ -146,8 +144,7 @@ export default function LuxuryStoreLedgerApp() {
       } catch {}
       setCustomers([]);
       setSelectedCustomerId(null);
-      playKeypadClick();
-      triggerToast('تم تصفير الدفتر بالكامل! السجل فارغ الآن وجاهز لإدخال زبائنك الحقيقيين. ✨');
+      triggerToast('تم تصفير الدفتر بالكامل، السجل فارغ الآن');
     }
   };
 
@@ -180,107 +177,6 @@ export default function LuxuryStoreLedgerApp() {
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
-  };
-
-  /**
-   * Fast, tactile mechanical microswitch "TICK" (تك) for keypad buttons
-   */
-  const playKeypadClick = () => {
-    try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = new AudioCtx();
-      const now = ctx.currentTime;
-
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(480, now);
-      osc.frequency.exponentialRampToValueAtTime(70, now + 0.025);
-
-      gain.gain.setValueAtTime(0.7, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.025);
-    } catch {
-      // Audio fallback
-    }
-  };
-
-  /**
-   * Powerful Vintage Cash Register Sound (صوت تك كاشير ميكانيكي قوي ورنين نقي)
-   * Layer 1: Heavy mechanical latch snap "تَكْ"
-   * Layer 2: Mechanical drawer open body resonance thump
-   * Layer 3: Authentic dual harmonic brass bell chime (Ka-Ching!)
-   */
-  const playCashRegisterSound = () => {
-    try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = new AudioCtx();
-      const now = ctx.currentTime;
-
-      // 1. Heavy mechanical latch "TICK / CLACK" (تك قوي جداً)
-      const oscTick = ctx.createOscillator();
-      const gainTick = ctx.createGain();
-      oscTick.type = 'square';
-      oscTick.frequency.setValueAtTime(720, now);
-      oscTick.frequency.exponentialRampToValueAtTime(80, now + 0.038);
-      gainTick.gain.setValueAtTime(0.95, now);
-      gainTick.gain.exponentialRampToValueAtTime(0.001, now + 0.038);
-      oscTick.connect(gainTick);
-      gainTick.connect(ctx.destination);
-      oscTick.start(now);
-      oscTick.stop(now + 0.038);
-
-      // 2. Mechanical drawer body thump
-      const oscThump = ctx.createOscillator();
-      const gainThump = ctx.createGain();
-      oscThump.type = 'sine';
-      oscThump.frequency.setValueAtTime(150, now + 0.01);
-      oscThump.frequency.exponentialRampToValueAtTime(35, now + 0.09);
-      gainThump.gain.setValueAtTime(0.75, now + 0.01);
-      gainThump.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
-      oscThump.connect(gainThump);
-      gainThump.connect(ctx.destination);
-      oscThump.start(now + 0.01);
-      oscThump.stop(now + 0.09);
-
-      // 3. Clear, Rich Vintage Brass Bell Chime (Ka-Ching! رنين جرس الكاشير)
-      const bellHigh = ctx.createOscillator();
-      const bellMid = ctx.createOscillator();
-      const bellOvertone = ctx.createOscillator();
-      const gainBell = ctx.createGain();
-
-      bellHigh.type = 'sine';
-      bellMid.type = 'sine';
-      bellOvertone.type = 'sine';
-
-      // Harmonic frequencies for rich brass cash register bell (G6, D7, G7)
-      bellHigh.frequency.setValueAtTime(1567.98, now + 0.03);
-      bellMid.frequency.setValueAtTime(2349.32, now + 0.03);
-      bellOvertone.frequency.setValueAtTime(3135.96, now + 0.03);
-
-      gainBell.gain.setValueAtTime(0, now);
-      gainBell.gain.setValueAtTime(0.85, now + 0.03);
-      gainBell.gain.exponentialRampToValueAtTime(0.0001, now + 0.7);
-
-      bellHigh.connect(gainBell);
-      bellMid.connect(gainBell);
-      bellOvertone.connect(gainBell);
-      gainBell.connect(ctx.destination);
-
-      bellHigh.start(now + 0.03);
-      bellMid.start(now + 0.03);
-      bellOvertone.start(now + 0.03);
-
-      bellHigh.stop(now + 0.7);
-      bellMid.stop(now + 0.7);
-      bellOvertone.stop(now + 0.7);
-    } catch {
-      // Audio fallback
-    }
   };
 
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId) || (customers.length > 0 ? customers[0] : null);
@@ -346,7 +242,6 @@ export default function LuxuryStoreLedgerApp() {
     );
 
     saveCustomersState(updated);
-    playCashRegisterSound();
 
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
     const verifyUrl = `${origin}/verify?tx=${newTxId}&type=${posMode}&amount=${amountNum}&customer=${encodeURIComponent(
@@ -372,8 +267,8 @@ export default function LuxuryStoreLedgerApp() {
 
     triggerToast(
       currentMode === 'REPAYMENT'
-        ? `تم سداد ${amountNum} ₪ وتخفيض رصيد ${selectedCustomer.name} بنجاح! 💵`
-        : `تم تسجيل دين جديد بقيمة ${amountNum} ₪ على حساب ${selectedCustomer.name} 📝`
+        ? `تم قيد سداد ${amountNum} ₪ لحساب ${selectedCustomer.name}`
+        : `تم قيد دين بقيمة ${amountNum} ₪ على ${selectedCustomer.name}`
     );
   };
 
@@ -421,11 +316,10 @@ export default function LuxuryStoreLedgerApp() {
     setNewCustInitialDebt('50');
     setNewCustDebtReason('رصيد دين سابق / مشتريات');
 
-    playCashRegisterSound();
     triggerToast(
       initialDebtNum > 0
-        ? `تمت إضافة الزبون "${newCustName}" كمديون بمبلغ ${initialDebtNum} ₪ بنجاح! 👤`
-        : `تمت إضافة الزبون "${newCustName}" إلى الدفتر بنجاح! 👤`
+        ? `تمت إضافة ${newCustName} برصيد دين ${initialDebtNum} ₪`
+        : `تمت إضافة الزبون ${newCustName} إلى الدفتر`
     );
   };
 
@@ -437,86 +331,52 @@ export default function LuxuryStoreLedgerApp() {
         isDark ? 'bg-theme-luxury text-slate-100' : 'bg-theme-day text-slate-800'
       }`}
     >
-      {/* Toast Alert */}
+      {/* Floating Modern Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 max-w-sm w-full px-4 animate-in fade-in slide-in-from-top-4">
-          <div className="bg-emerald-600 text-white font-bold px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-emerald-400">
-            <CheckCircle2 className="w-5 h-5 shrink-0" />
-            <span className="text-sm">{toastMessage}</span>
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className="bg-slate-900/95 text-white font-medium text-xs sm:text-sm px-4 py-2.5 rounded-full shadow-2xl flex items-center gap-2.5 border border-emerald-500/40 backdrop-blur-md">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{toastMessage}</span>
           </div>
         </div>
       )}
 
-      {/* Top Header */}
+      {/* Top Header - Spacious & Clean */}
       <header
-        className={`border-b sticky top-0 z-30 px-4 lg:px-8 py-3.5 backdrop-blur-md transition-colors ${
+        className={`border-b sticky top-0 z-30 px-4 lg:px-8 py-3 backdrop-blur-md transition-colors ${
           isDark
-            ? 'bg-slate-950/80 border-slate-800/80'
-            : 'bg-white/90 border-slate-200 shadow-xs'
+            ? 'bg-slate-950/85 border-slate-800/80'
+            : 'bg-white/95 border-slate-200 shadow-xs'
         }`}
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           {/* Logo & Store Profile */}
-          <div className="flex items-center gap-3.5">
-            <DaftarLogo size={40} showText={true} />
-            <div className={`h-6 w-px hidden sm:block ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
-            <div className="hidden sm:block">
-              <span className={`text-xs font-extrabold flex items-center gap-1.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+          <div className="flex items-center gap-3">
+            <DaftarLogo size={36} showText={true} />
+            <div className={`h-5 w-px hidden sm:block ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+            <div className="hidden sm:flex flex-col">
+              <span className={`text-xs font-bold flex items-center gap-1.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
                 <Store className="w-3.5 h-3.5 text-emerald-500" />
                 {storeName}
               </span>
-              <span className="text-[11px] text-slate-400 block -mt-0.5">{storeOwner} • {storeLocation}</span>
+              <span className="text-[11px] text-slate-400">{storeOwner} • {storeLocation}</span>
             </div>
           </div>
 
-          {/* Center Analytics & Theme Switcher */}
-          <div className="flex items-center gap-3">
-            {/* Quick Metrics */}
-            <div
-              className={`hidden md:flex items-center gap-4 px-4 py-1.5 rounded-xl border text-xs ${
-                isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-50 border-slate-200'
-              }`}
-            >
-              <div>
-                <span className="text-slate-400 text-[10px] block">ديون المحل الكلية:</span>
-                <span className="font-extrabold text-amber-500 text-sm">{totalOutstandingBalance} ₪</span>
-              </div>
-              <div className={`w-px h-6 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
-              <div>
-                <span className="text-slate-400 text-[10px] block">الزبائن المديونين:</span>
-                <span className="font-extrabold text-emerald-400 text-sm">{activeDebtorsCount} زبون</span>
-              </div>
-            </div>
-
-            {/* Instant Theme Switcher */}
+          {/* Clean Controls */}
+          <div className="flex items-center gap-2">
+            {/* Theme Switcher */}
             <button
               onClick={() => setThemeMode(isDark ? 'DAY' : 'LUXURY')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
                 isDark
-                  ? 'bg-slate-900 border-slate-700 text-amber-400 hover:bg-slate-800'
-                  : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 shadow-xs'
+                  ? 'bg-slate-900 border-slate-800 text-amber-400 hover:bg-slate-800'
+                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
               }`}
-              title="تغيير ثيم وخلفية المنصة"
+              title="تغيير الثيم (ليلي / نهاري)"
             >
-              {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
-              <span className="hidden sm:inline">{isDark ? 'ثيم نهاري نقي' : 'ثيم ليلي فاخر'}</span>
-            </button>
-
-            {/* Cash Register Sound Test Button */}
-            <button
-              onClick={() => {
-                playCashRegisterSound();
-                triggerToast('🔊 صوت الكاشير الميكانيكي الفاخر يعمل بنجاح! (تك + رنين)');
-              }}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${
-                isDark
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
-                  : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-              }`}
-              title="تجربة صوت الكاشير والتك الميكانيكي"
-            >
-              <Volume2 className="w-4 h-4 text-emerald-500" />
-              <span className="hidden sm:inline">صوت الكاشير (تك)</span>
+              {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-indigo-600" />}
+              <span className="hidden sm:inline">{isDark ? 'نهاري' : 'ليلي'}</span>
             </button>
 
             {/* Store Settings Button */}
@@ -524,8 +384,8 @@ export default function LuxuryStoreLedgerApp() {
               onClick={() => setShowStoreSettingsModal(true)}
               className={`p-2 rounded-xl border transition-all ${
                 isDark
-                  ? 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
+                  ? 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white'
+                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
               }`}
               title="تخصيص بيانات المحل"
             >
@@ -535,9 +395,9 @@ export default function LuxuryStoreLedgerApp() {
         </div>
       </header>
 
-      {/* Interactive Store Pulse & Collection Health Bar */}
+      {/* Focused Store Metrics Overview */}
       <section className="max-w-7xl mx-auto w-full px-4 lg:px-8 pt-5">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           {/* Card 1: Outstanding Debt */}
           <div className={`p-4 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
             <div className="flex justify-between items-start">
@@ -553,41 +413,23 @@ export default function LuxuryStoreLedgerApp() {
             <p className="text-[11px] text-slate-400">في ذمة {activeDebtorsCount} زبائن حتى اللحظة</p>
           </div>
 
-          {/* Card 2: Collection Health Gauge */}
-          <div className={`p-4 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
-            <div className="flex justify-between items-start">
-              <span className="text-xs font-bold text-slate-400">حالة الصندوق والحسابات</span>
-              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-                <CheckCircle2 className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="my-1.5 flex items-baseline gap-2">
-              <span className="text-2xl lg:text-3xl font-black text-emerald-400 font-mono">{customers.length}</span>
-              <span className="text-[10px] text-emerald-500 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                زبائن مسجلين
-              </span>
-            </div>
-            <div className="w-full bg-slate-800/40 rounded-full h-1.5 mt-1 overflow-hidden">
-              <div className="bg-emerald-500 h-full rounded-full transition-all" style={{ width: `${customers.length > 0 ? 100 : 0}%` }} />
-            </div>
-          </div>
 
-          {/* Card 3: Debtors Count */}
+          {/* Card 2: Debtors Count */}
           <div className={`p-4 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
             <div className="flex justify-between items-start">
               <span className="text-xs font-bold text-slate-400">زبائن عليهم ديون حالية</span>
-              <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
                 <Users className="w-4 h-4" />
               </div>
             </div>
             <div className="my-1.5">
-              <span className="text-2xl lg:text-3xl font-black text-amber-400 font-mono">{activeDebtorsCount}</span>
+              <span className="text-2xl lg:text-3xl font-black text-emerald-400 font-mono">{activeDebtorsCount}</span>
               <span className="text-xs font-bold text-slate-400 mr-1.5">زبون</span>
             </div>
-            <p className="text-[11px] text-slate-400">مسجلين في دفتر الديون</p>
+            <p className="text-[11px] text-slate-400">من إجمالي {customers.length} مسجلين بالدفتر</p>
           </div>
 
-          {/* Card 4: Overdue Alert Count */}
+          {/* Card 3: Overdue Alert Count */}
           <div className={`p-4 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
             <div className="flex justify-between items-start">
               <span className="text-xs font-bold text-slate-400">ديون متأخرة المتابعة</span>
@@ -995,10 +837,7 @@ export default function LuxuryStoreLedgerApp() {
               {[10, 20, 50, 100].map((amt) => (
                 <button
                   key={amt}
-                  onClick={() => {
-                    playKeypadClick();
-                    setPosAmount(amt.toString());
-                  }}
+                  onClick={() => setPosAmount(amt.toString())}
                   className={`font-bold px-3 py-1 rounded-xl text-xs transition-all border ${
                     isDark ? 'bg-slate-800 border-slate-700 text-slate-200 hover:border-emerald-500' : 'bg-slate-100 border-slate-300 text-slate-800 hover:border-emerald-500'
                   }`}
@@ -1008,10 +847,7 @@ export default function LuxuryStoreLedgerApp() {
               ))}
               {posMode === 'REPAYMENT' && selectedCustomer.balance > 0 && (
                 <button
-                  onClick={() => {
-                    playKeypadClick();
-                    setPosAmount(selectedCustomer.balance.toString());
-                  }}
+                  onClick={() => setPosAmount(selectedCustomer.balance.toString())}
                   className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1 rounded-xl text-xs"
                 >
                   كامل الرصيد ({selectedCustomer.balance} ₪)
@@ -1024,10 +860,7 @@ export default function LuxuryStoreLedgerApp() {
               {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'CLEAR', '0', 'BACK'].map((key) => (
                 <button
                   key={key}
-                  onClick={() => {
-                    playKeypadClick();
-                    handleKeypadPress(key);
-                  }}
+                  onClick={() => handleKeypadPress(key)}
                   className={`py-3.5 rounded-xl border transition-all active:scale-90 flex items-center justify-center font-bold text-lg ${
                     key === 'CLEAR'
                       ? 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30 text-xs font-sans'
@@ -1123,10 +956,7 @@ export default function LuxuryStoreLedgerApp() {
 
                 {/* Instant "تم وخلاص" Confirmation Button */}
                 <button
-                  onClick={() => {
-                    playCashRegisterSound();
-                    setQrDoneSuccess(true);
-                  }}
+                  onClick={() => setQrDoneSuccess(true)}
                   className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 rounded-xl text-sm transition-all shadow-lg shadow-emerald-600/25 active:scale-95 flex items-center justify-center gap-2"
                 >
                   <CheckCircle2 className="w-5 h-5" />
