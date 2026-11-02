@@ -34,6 +34,7 @@ import {
   Download,
   Upload,
   Lock,
+  MessageCircle,
 } from 'lucide-react';
 import { DaftarLogo } from '@/components/DaftarLogo';
 import { RealQRCode } from '@/components/RealQRCode';
@@ -42,6 +43,7 @@ import { useDaftarDb } from '@/core/db/useDaftarDb';
 import { ThermalReceipt } from '@/components/ThermalReceipt';
 import { CameraQRScanner } from '@/components/CameraQRScanner';
 import { StoreSettingsModal } from '@/components/StoreSettingsModal';
+import { BarcodeViewModal } from '@/components/BarcodeView';
 import { Transaction } from '@/core/db/types';
 
 export default function LuxuryStoreLedgerApp() {
@@ -70,6 +72,8 @@ export default function LuxuryStoreLedgerApp() {
   const [showStoreSettingsModal, setShowStoreSettingsModal] = useState(false);
   const [showCameraScanner, setShowCameraScanner] = useState(false);
   const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
+  const [showCustomerBarcodeModal, setShowCustomerBarcodeModal] = useState(false);
+  const [viewingTxBarcode, setViewingTxBarcode] = useState<Transaction | null>(null);
 
   // Selected Transaction for Thermal Printing
   const [activePrintTx, setActivePrintTx] = useState<Transaction | null>(null);
@@ -149,6 +153,57 @@ export default function LuxuryStoreLedgerApp() {
     setPosAmount((prev) => (prev === '0' ? val : prev + val));
   };
 
+  // WhatsApp Helper Functions
+  const getWhatsAppUrl = (phone: string, text: string) => {
+    let intlPhone = phone.replace(/\D/g, '');
+    if (intlPhone.startsWith('0')) {
+      intlPhone = '970' + intlPhone.slice(1);
+    }
+    return `https://api.whatsapp.com/send?phone=${intlPhone}&text=${encodeURIComponent(text)}`;
+  };
+
+  const getCustomerStatementWhatsAppUrl = () => {
+    if (!selectedCustomer) return '#';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+    const verifyUrl = `${origin}/verify?tx=STATEMENT-${selectedCustomer.id}&type=DEBT&amount=${selectedCustomer.balance}&customer=${encodeURIComponent(
+      selectedCustomer.name
+    )}&phone=${selectedCustomer.phone}&store=${encodeURIComponent(storeConfig.storeName)}&details=${encodeURIComponent(
+      'كشف حساب إجمالي الرصيد المستحق'
+    )}`;
+
+    const text =
+      `السلام عليكم أخي/أختي ${selectedCustomer.name}\n` +
+      `إشعار كشف حساب معتمد من ${storeConfig.storeName}:\n` +
+      `• الرصيد المستحق بذمتكم: ${selectedCustomer.balance} ${storeConfig.currency}\n` +
+      `• سقف الدين المعتمد: ${selectedCustomer.debtCeiling} ${storeConfig.currency}\n` +
+      `• عدد الحركات المسجلة: ${customerTransactions.length}\n` +
+      `رابط التحقق المشفر والباركود:\n${verifyUrl}\n` +
+      `شكراً لتعاملكم الراقي معنا!`;
+
+    return getWhatsAppUrl(selectedCustomer.phone, text);
+  };
+
+  const getTxWhatsAppUrl = (tx: Transaction) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+    const verifyUrl = `${origin}/verify?tx=${tx.id}&type=${tx.type}&amount=${tx.amount}&customer=${encodeURIComponent(
+      tx.customerName
+    )}&phone=${tx.customerPhone}&store=${encodeURIComponent(storeConfig.storeName)}&details=${encodeURIComponent(
+      tx.details
+    )}`;
+
+    const text =
+      `سند مالي معتمد من ${storeConfig.storeName}\n` +
+      `الزبون: ${tx.customerName}\n` +
+      `نوع العملية: ${tx.type === 'REPAYMENT' ? 'سداد دفعة نقدية كاش' : 'تسجيل دين بضاعة'}\n` +
+      `المبلغ: ${tx.amount} ${storeConfig.currency}\n` +
+      `الرصيد المتبقي بعدها: ${tx.newBalance} ${storeConfig.currency}\n` +
+      `البيان: ${tx.details}\n` +
+      `رقم السند: ${tx.id}\n` +
+      `رابط السند والباركود:\n${verifyUrl}`;
+
+    return getWhatsAppUrl(tx.customerPhone, text);
+  };
+
   // Execute POS Transaction
   const handleExecutePosTransaction = async () => {
     const amountNum = parseFloat(posAmount);
@@ -205,8 +260,8 @@ export default function LuxuryStoreLedgerApp() {
 
       triggerToast(
         currentMode === 'REPAYMENT'
-          ? `تم حفظ سداد ${amountNum} ${storeConfig.currency} لحساب ${selectedCustomer.name} بقاعدة البيانات`
-          : `تم قيد دين بقيمة ${amountNum} ${storeConfig.currency} على ${selectedCustomer.name} بقاعدة البيانات`
+          ? `تم حفظ سداد ${amountNum} ${storeConfig.currency} لحساب ${selectedCustomer.name}`
+          : `تم قيد دين بقيمة ${amountNum} ${storeConfig.currency} على ${selectedCustomer.name}`
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'فشل تنفيذ العملية';
@@ -291,7 +346,7 @@ export default function LuxuryStoreLedgerApp() {
         const remaining = customers.filter((c) => c.id !== customerId);
         setSelectedCustomerId(remaining.length > 0 ? remaining[0].id : null);
       }
-      triggerToast(`تم حذف حساب الزبون (${customerName}) نهائياً من قاعدة البيانات`);
+      triggerToast(`تم حذف حساب الزبون (${customerName}) نهائياً`);
     }
   };
 
@@ -342,6 +397,52 @@ export default function LuxuryStoreLedgerApp() {
         triggerToast={triggerToast}
       />
 
+      {/* Dedicated Customer Statement Barcode & QR Code Modal */}
+      {showCustomerBarcodeModal && selectedCustomer && (
+        <BarcodeViewModal
+          isOpen={showCustomerBarcodeModal}
+          onClose={() => setShowCustomerBarcodeModal(false)}
+          title={`باركود وكود كشف حساب: ${selectedCustomer.name}`}
+          subtitle={`إجمالي الرصيد المستحق بذمته: ${selectedCustomer.balance} ${storeConfig.currency}`}
+          codeId={`CUST-${selectedCustomer.phone}`}
+          amount={selectedCustomer.balance}
+          currency={storeConfig.currency}
+          customerName={selectedCustomer.name}
+          customerPhone={selectedCustomer.phone}
+          verifyUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/verify?tx=STATEMENT-${selectedCustomer.id}&type=DEBT&amount=${selectedCustomer.balance}&customer=${encodeURIComponent(selectedCustomer.name)}&phone=${selectedCustomer.phone}&store=${encodeURIComponent(storeConfig.storeName)}`}
+          whatsappMessage={`إشعار كشف حساب من ${storeConfig.storeName}\nالزبون: ${selectedCustomer.name}\nالرصيد المستحق: ${selectedCustomer.balance} ${storeConfig.currency}\nسقف الدين: ${selectedCustomer.debtCeiling} ${storeConfig.currency}\nرابط التحقق والباركود: ${typeof window !== 'undefined' ? window.location.origin : ''}/verify?tx=STATEMENT-${selectedCustomer.id}&type=DEBT&amount=${selectedCustomer.balance}&customer=${encodeURIComponent(selectedCustomer.name)}&phone=${selectedCustomer.phone}&store=${encodeURIComponent(storeConfig.storeName)}`}
+          onPrint={() => {
+            if (customerTransactions.length > 0) {
+              setActivePrintTx(customerTransactions[0]);
+              setTimeout(() => window.print(), 100);
+            } else {
+              triggerToast('لا توجد حركات لطباعتها');
+            }
+          }}
+        />
+      )}
+
+      {/* Dedicated Transaction Barcode & QR Code Modal */}
+      {viewingTxBarcode && (
+        <BarcodeViewModal
+          isOpen={!!viewingTxBarcode}
+          onClose={() => setViewingTxBarcode(null)}
+          title={viewingTxBarcode.type === 'REPAYMENT' ? 'باركود إيصال سداد الدفعة' : 'باركود إيصال تسجيل الدين'}
+          subtitle={`سند رقم: ${viewingTxBarcode.id} • ${viewingTxBarcode.details}`}
+          codeId={viewingTxBarcode.id}
+          amount={viewingTxBarcode.amount}
+          currency={storeConfig.currency}
+          customerName={viewingTxBarcode.customerName}
+          customerPhone={viewingTxBarcode.customerPhone}
+          verifyUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/verify?tx=${viewingTxBarcode.id}&type=${viewingTxBarcode.type}&amount=${viewingTxBarcode.amount}&customer=${encodeURIComponent(viewingTxBarcode.customerName)}&phone=${viewingTxBarcode.customerPhone}&store=${encodeURIComponent(storeConfig.storeName)}&details=${encodeURIComponent(viewingTxBarcode.details)}`}
+          whatsappMessage={`سند مالي معتمد من ${storeConfig.storeName}\nالزبون: ${viewingTxBarcode.customerName}\nالعملية: ${viewingTxBarcode.type === 'REPAYMENT' ? 'سداد دفعة' : 'تسجيل دين'}\nالمبلغ: ${viewingTxBarcode.amount} ${storeConfig.currency}\nالرصيد المتبقي: ${viewingTxBarcode.newBalance} ${storeConfig.currency}\nرقم السند: ${viewingTxBarcode.id}\nرابط السند: ${typeof window !== 'undefined' ? window.location.origin : ''}/verify?tx=${viewingTxBarcode.id}&type=${viewingTxBarcode.type}&amount=${viewingTxBarcode.amount}&customer=${encodeURIComponent(viewingTxBarcode.customerName)}&phone=${viewingTxBarcode.customerPhone}&store=${encodeURIComponent(storeConfig.storeName)}&details=${encodeURIComponent(viewingTxBarcode.details)}`}
+          onPrint={() => {
+            setActivePrintTx(viewingTxBarcode);
+            setTimeout(() => window.print(), 100);
+          }}
+        />
+      )}
+
       {/* Floating Modern Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 animate-in fade-in slide-in-from-bottom-4 duration-200">
@@ -380,10 +481,10 @@ export default function LuxuryStoreLedgerApp() {
             <button
               onClick={() => setShowCameraScanner(true)}
               className="flex items-center gap-1.5 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95"
-              title="مسح رمز السند المطبوع بالكاميرا"
+              title="مسح رمز السند المطبوع بكاميرا الهاتف"
             >
               <Camera className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">مسح بالكاميرا</span>
+              <span className="hidden sm:inline">مسح الباركود بالكاميرا</span>
             </button>
 
             {/* Theme Switcher */}
@@ -571,6 +672,12 @@ export default function LuxuryStoreLedgerApp() {
                 const isCleared = cust.balance === 0;
                 const isOverdue = cust.balance > cust.debtCeiling;
 
+                // Quick WhatsApp Link
+                const quickWhatsAppLink = getWhatsAppUrl(
+                  cust.phone,
+                  `السلام عليكم ${cust.name}، تحياتنا من ${storeConfig.storeName}.\nرصيدكم الحالي: ${cust.balance} ${storeConfig.currency}.`
+                );
+
                 return (
                   <div
                     key={cust.id}
@@ -628,6 +735,18 @@ export default function LuxuryStoreLedgerApp() {
                         </span>
                       </div>
 
+                      {/* Fast WhatsApp Chat Button */}
+                      <a
+                        href={quickWhatsAppLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/20 transition-all opacity-80 hover:opacity-100"
+                        title="محادثة واتساب سريعة"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </a>
+
                       {/* Delete Customer Button */}
                       <button
                         onClick={(e) => handleDeleteCustomer(cust.id, cust.name, e)}
@@ -659,11 +778,25 @@ export default function LuxuryStoreLedgerApp() {
                       <h2 className={`text-base font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
                         كشف حساب: {selectedCustomer.name}
                       </h2>
-                      <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400 font-mono">
-                        <Phone className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{selectedCustomer.phone}</span>
+                      <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-slate-400 font-mono">
+                        <span className="flex items-center gap-1">
+                          <Phone className="w-3.5 h-3.5 text-slate-400" />
+                          {selectedCustomer.phone}
+                        </span>
                         <span>•</span>
                         <span>سقف الدين: {selectedCustomer.debtCeiling} {storeConfig.currency}</span>
+                        <span>•</span>
+                        {/* WhatsApp Instant Chat Pill */}
+                        <a
+                          href={getCustomerStatementWhatsAppUrl()}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30 transition-all shadow-xs"
+                          title="فتح محادثة واتساب فورية"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>واتساب</span>
+                        </a>
                       </div>
                     </div>
                   </div>
@@ -692,7 +825,7 @@ export default function LuxuryStoreLedgerApp() {
                   </div>
                 </div>
 
-                {/* Primary Action Buttons: Settle Debt / Add Debt */}
+                {/* Primary Action Buttons: Settle Debt, Add Debt, Barcode/QR, WhatsApp */}
                 <div className="flex flex-wrap items-center gap-2.5 pt-4">
                   {/* Settle Debt Button */}
                   <button
@@ -726,6 +859,28 @@ export default function LuxuryStoreLedgerApp() {
                     <span>تسجيل دين بضاعة</span>
                   </button>
 
+                  {/* PROMINENT BARCODE / QR MODAL TRIGGER */}
+                  <button
+                    onClick={() => setShowCustomerBarcodeModal(true)}
+                    className="flex-1 sm:flex-none bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/40 font-black px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all"
+                    title="عرض كود QR والباركود لكشف حساب الزبون"
+                  >
+                    <QrCode className="w-4 h-4 text-emerald-400" />
+                    <span>عرض الباركود و QR</span>
+                  </button>
+
+                  {/* PROMINENT WHATSAPP DISPATCH BUTTON */}
+                  <a
+                    href={getCustomerStatementWhatsAppUrl()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-500 text-white font-black px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/25 active:scale-95 transition-all"
+                    title="إرسال كشف الحساب والرصيد المستحق للزبون عبر واتساب"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span>إرسال كشف الحساب واتساب</span>
+                  </a>
+
                   {/* Print Statement Button */}
                   <button
                     onClick={() => {
@@ -736,7 +891,7 @@ export default function LuxuryStoreLedgerApp() {
                         triggerToast('لا توجد حركات لطباعة سند');
                       }
                     }}
-                    className="flex-1 sm:flex-none bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                    className="flex-1 sm:flex-none bg-slate-800 hover:bg-slate-700 text-slate-300 px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all border border-slate-700"
                     title="طباعة آخر إيصال حراري"
                   >
                     <Printer className="w-4 h-4" />
@@ -797,7 +952,8 @@ export default function LuxuryStoreLedgerApp() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        {/* Financial Amounts & Action Icons */}
+                        <div className="flex items-center gap-2 sm:gap-3">
                           <div className="flex flex-col items-end">
                             <span
                               className={`text-sm font-black font-mono ${
@@ -811,13 +967,33 @@ export default function LuxuryStoreLedgerApp() {
                             </span>
                           </div>
 
-                          {/* Print single thermal receipt button */}
+                          {/* ACTION 1: View Barcode & QR code for this specific transaction */}
+                          <button
+                            onClick={() => setViewingTxBarcode(tx)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all border border-transparent hover:border-emerald-500/30"
+                            title="عرض باركود ورمز QR لهذه الحركة"
+                          >
+                            <QrCode className="w-4 h-4" />
+                          </button>
+
+                          {/* ACTION 2: Direct WhatsApp Send for this specific transaction */}
+                          <a
+                            href={getTxWhatsAppUrl(tx)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all border border-transparent hover:border-emerald-500/30"
+                            title="إرسال سند هذه الحركة للزبون عبر واتساب"
+                          >
+                            <Share2 className="w-4 h-4" />
+                          </a>
+
+                          {/* ACTION 3: Print single thermal receipt button */}
                           <button
                             onClick={() => {
                               setActivePrintTx(tx);
                               setTimeout(() => window.print(), 100);
                             }}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all border border-transparent hover:border-slate-700"
                             title="طباعة إيصال حراري"
                           >
                             <Printer className="w-4 h-4" />
@@ -966,7 +1142,7 @@ export default function LuxuryStoreLedgerApp() {
                   >
                     <CheckCircle2 className="w-5 h-5" />
                     <span>
-                      {isOverpaying ? `غير مسموح بسداد أكثر من الدين` : 'تأكيد وحفظ العملية بقاعدة البيانات'}
+                      {isOverpaying ? `غير مسموح بسداد أكثر من الدين` : 'تأكيد واستخراج كود السند والباركود'}
                     </span>
                   </button>
                 </>
@@ -983,7 +1159,7 @@ export default function LuxuryStoreLedgerApp() {
             isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
           }`}>
             <div className="w-full flex items-center justify-between border-b border-slate-800 pb-2">
-              <span className="text-xs font-bold text-slate-400">سند رقمي موثق</span>
+              <span className="text-xs font-bold text-slate-400">سند رقمي موثق مع الباركود</span>
               <button onClick={() => setQrModalData(null)} className="text-slate-400 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
@@ -991,8 +1167,8 @@ export default function LuxuryStoreLedgerApp() {
 
             {!qrDoneSuccess ? (
               <>
-                <div className="border-2 border-slate-800 rounded-2xl p-2 bg-white shadow-xl">
-                  <RealQRCode value={qrModalData.url} size={190} />
+                <div className="border-2 border-emerald-500/40 rounded-2xl p-2.5 bg-white shadow-xl">
+                  <RealQRCode value={qrModalData.url} size={180} />
                 </div>
 
                 <div className="w-full bg-slate-950 rounded-xl p-3 text-xs space-y-1 text-right border border-slate-800">
@@ -1021,12 +1197,12 @@ export default function LuxuryStoreLedgerApp() {
                   </button>
 
                   <a
-                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                      `سند مالي من ${storeConfig.storeName}%0Aالزبون: ${qrModalData.customerName}%0Aالعملية: ${
-                        qrModalData.type === 'REPAYMENT' ? 'سداد دفعة' : 'تسجيل دين'
-                      }%0Aالمبلغ: ${qrModalData.amount} ${storeConfig.currency}%0Aالرصيد المتبقي: ${
+                    href={`https://api.whatsapp.com/send?phone=${qrModalData.customerPhone.startsWith('0') ? '970' + qrModalData.customerPhone.slice(1) : qrModalData.customerPhone}&text=${encodeURIComponent(
+                      `سند مالي من ${storeConfig.storeName}\nالزبون: ${qrModalData.customerName}\nالعملية: ${
+                        qrModalData.type === 'REPAYMENT' ? 'سداد دفعة نقدية' : 'تسجيل دين بضاعة'
+                      }\nالمبلغ: ${qrModalData.amount} ${storeConfig.currency}\nالرصيد المتبقي: ${
                         qrModalData.newBalance
-                      } ${storeConfig.currency}%0Aرقم السند: ${qrModalData.receiptId}%0Aرابط التحقق: ${qrModalData.url}`
+                      } ${storeConfig.currency}\nرقم السند: ${qrModalData.receiptId}\nرابط السند والباركود:\n${qrModalData.url}`
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"
