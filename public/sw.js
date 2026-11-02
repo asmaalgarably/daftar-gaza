@@ -1,15 +1,18 @@
 // Daftar Offline Service Worker
-const CACHE_NAME = 'daftar-cache-v1';
+const CACHE_NAME = 'daftar-cache-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
-  '/globals.css',
+  '/icon-192.png',
+  '/icon-512.png',
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
+      return Promise.allSettled(
+        STATIC_ASSETS.map((url) => cache.add(url).catch((err) => console.log('SW cache skip:', url, err)))
+      );
     })
   );
   self.skipWaiting();

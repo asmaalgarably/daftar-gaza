@@ -23,139 +23,63 @@ import {
   TrendingUp,
   AlertCircle,
   Printer,
-  ChevronDown,
   Sun,
   Moon,
-  Sparkles,
-  Percent,
   Calculator,
-  Delete,
   UserPlus,
   BookOpen,
   Trash2,
+  Camera,
+  ShieldCheck,
+  Download,
+  Upload,
+  Lock,
 } from 'lucide-react';
 import { DaftarLogo } from '@/components/DaftarLogo';
 import { RealQRCode } from '@/components/RealQRCode';
 import { validatePalestinianPhone } from '@/core/validators/phone';
-
-interface CustomerTransaction {
-  id: string;
-  type: 'DEBT' | 'REPAYMENT';
-  amount: number;
-  details: string;
-  date: string;
-  receiptNumber: string;
-}
-
-interface Customer {
-  id: string;
-  name: string;
-  phone: string;
-  balance: number;
-  debtCeiling: number;
-  lastActive: string;
-  tag: 'VIP' | 'REGULAR' | 'OVERDUE';
-  transactions: CustomerTransaction[];
-}
+import { useDaftarDb } from '@/core/db/useDaftarDb';
+import { ThermalReceipt } from '@/components/ThermalReceipt';
+import { CameraQRScanner } from '@/components/CameraQRScanner';
+import { StoreSettingsModal } from '@/components/StoreSettingsModal';
+import { Transaction } from '@/core/db/types';
 
 export default function LuxuryStoreLedgerApp() {
   const [themeMode, setThemeMode] = useState<'LUXURY' | 'DAY'>('LUXURY');
 
-  // Store Profile (Customizable & Persisted)
-  const [storeName, setStoreName] = useState('سوبرماركت الأمل');
-  const [storeOwner, setStoreOwner] = useState('أبو خليل');
-  const [storeLocation, setStoreLocation] = useState('غزة - دير البلح');
-  const [showStoreSettingsModal, setShowStoreSettingsModal] = useState(false);
+  // Connect to Offline-First Persistent IndexedDB
+  const {
+    isReady,
+    storeConfig,
+    customers,
+    transactions,
+    recordTransaction,
+    createCustomer,
+    deleteCustomer,
+    updateStoreConfig,
+    exportBackup,
+    importBackup,
+    resetFactory,
+  } = useDaftarDb();
 
-  // Customer List (ZEROED OUT / CLEAN SLATE with localStorage support!)
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [customerFilter, setCustomerFilter] = useState<'ALL' | 'DEBTORS' | 'CLEARED' | 'OVERDUE'>('ALL');
 
-  // Load from localStorage on first mount & purge any legacy dummy data
-  useEffect(() => {
-    try {
-      const savedCusts = localStorage.getItem('daftar_gaza_customers');
-      if (savedCusts) {
-        const parsed: Customer[] = JSON.parse(savedCusts);
-        // Clean out any legacy mock data automatically so the ledger starts pure
-        const hasLegacyDummy = parsed.some(
-          (c) =>
-            c.name.includes('الرنتيسي') ||
-            c.name.includes('النجار') ||
-            c.name.includes('الجار') ||
-            c.name.includes('الدحدوح') ||
-            c.id === 'c1' ||
-            c.id === 'c2' ||
-            c.id === 'c3'
-        );
-        if (hasLegacyDummy) {
-          localStorage.removeItem('daftar_gaza_customers');
-          setCustomers([]);
-          setSelectedCustomerId(null);
-        } else {
-          setCustomers(parsed);
-          if (parsed.length > 0) {
-            setSelectedCustomerId(parsed[0].id);
-          }
-        }
-      }
+  // Modals & Features
+  const [showStoreSettingsModal, setShowStoreSettingsModal] = useState(false);
+  const [showCameraScanner, setShowCameraScanner] = useState(false);
+  const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
 
-      const savedStore = localStorage.getItem('daftar_gaza_store');
-      if (savedStore) {
-        const parsedStore = JSON.parse(savedStore);
-        if (parsedStore.storeName) setStoreName(parsedStore.storeName);
-        if (parsedStore.storeOwner) setStoreOwner(parsedStore.storeOwner);
-        if (parsedStore.storeLocation) setStoreLocation(parsedStore.storeLocation);
-      }
-    } catch {
-      // Storage fallback
-    }
-  }, []);
-
-  // Sync to localStorage
-  const saveCustomersState = (updated: Customer[]) => {
-    setCustomers(updated);
-    try {
-      localStorage.setItem('daftar_gaza_customers', JSON.stringify(updated));
-    } catch {
-      // storage fallback
-    }
-  };
-
-  // Delete individual customer with confirmation
-  const handleDeleteCustomer = (customerId: string, customerName: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    if (typeof window !== 'undefined' && window.confirm(`هل أنت متأكد من حذف حساب الزبون (${customerName}) نهائياً من دفتر الديون؟`)) {
-      const updated = customers.filter((c) => c.id !== customerId);
-      saveCustomersState(updated);
-      if (selectedCustomerId === customerId) {
-        setSelectedCustomerId(updated.length > 0 ? updated[0].id : null);
-      }
-      triggerToast(`تم حذف حساب الزبون (${customerName}) بنجاح`);
-    }
-  };
-
-  // Master wipe / reset all customers
-  const handleResetAllData = () => {
-    if (typeof window !== 'undefined' && window.confirm('هل أنت متأكد تماماً من تصفير كافة الحسابات ومسح جميع الزبائن من الدفتر للبدء من الصفر؟')) {
-      try {
-        localStorage.removeItem('daftar_gaza_customers');
-      } catch {}
-      setCustomers([]);
-      setSelectedCustomerId(null);
-      triggerToast('تم تصفير الدفتر بالكامل، السجل فارغ الآن');
-    }
-  };
+  // Selected Transaction for Thermal Printing
+  const [activePrintTx, setActivePrintTx] = useState<Transaction | null>(null);
 
   // Keypad & POS Action Mode
   const [posMode, setPosMode] = useState<'REPAYMENT' | 'DEBT' | null>(null);
   const [posAmount, setPosAmount] = useState('0');
   const [posDetails, setPosDetails] = useState('');
 
-  // Add Customer Modal
-  const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
+  // Add Customer Form State
   const [newCustName, setNewCustName] = useState('');
   const [newCustPhone, setNewCustPhone] = useState('');
   const [newCustInitialDebt, setNewCustInitialDebt] = useState('50');
@@ -168,8 +92,11 @@ export default function LuxuryStoreLedgerApp() {
     type: 'DEBT' | 'REPAYMENT';
     amount: number;
     customerName: string;
+    customerPhone: string;
     details: string;
     receiptId: string;
+    previousBalance: number;
+    newBalance: number;
   } | null>(null);
   const [qrDoneSuccess, setQrDoneSuccess] = useState(false);
 
@@ -180,13 +107,24 @@ export default function LuxuryStoreLedgerApp() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const selectedCustomer = customers.find((c) => c.id === selectedCustomerId) || (customers.length > 0 ? customers[0] : null);
+  // Determine Selected Customer
+  const selectedCustomer =
+    customers.find((c) => c.id === selectedCustomerId) || (customers.length > 0 ? customers[0] : null);
+
+  // Active Customer Transactions
+  const customerTransactions = transactions.filter((t) => t.customerId === selectedCustomer?.id);
+
+  // Set default selection when customers change
+  useEffect(() => {
+    if (customers.length > 0 && !selectedCustomerId) {
+      setSelectedCustomerId(customers[0].id);
+    }
+  }, [customers, selectedCustomerId]);
 
   // Store Analytics
   const totalOutstandingBalance = customers.reduce((sum, c) => sum + c.balance, 0);
   const activeDebtorsCount = customers.filter((c) => c.balance > 0).length;
-  const overdueCount = customers.filter((c) => c.tag === 'OVERDUE').length;
-  const collectionRate = customers.length === 0 ? 100 : Math.round((customers.filter((c) => c.balance === 0).length / customers.length) * 100);
+  const overdueCount = customers.filter((c) => c.balance > c.debtCeiling).length;
 
   // Filter customers
   const filteredCustomers = customers.filter((c) => {
@@ -194,7 +132,7 @@ export default function LuxuryStoreLedgerApp() {
     if (!matchesSearch) return false;
     if (customerFilter === 'DEBTORS') return c.balance > 0;
     if (customerFilter === 'CLEARED') return c.balance === 0;
-    if (customerFilter === 'OVERDUE') return c.tag === 'OVERDUE';
+    if (customerFilter === 'OVERDUE') return c.balance > c.debtCeiling;
     return true;
   });
 
@@ -212,11 +150,11 @@ export default function LuxuryStoreLedgerApp() {
   };
 
   // Execute POS Transaction
-  const handleExecutePosTransaction = () => {
+  const handleExecutePosTransaction = async () => {
     const amountNum = parseFloat(posAmount);
     if (isNaN(amountNum) || amountNum <= 0 || !selectedCustomer || !posMode) return;
 
-    // Strict Repayment constraint: cannot pay more than the outstanding debt
+    // Strict Repayment constraint
     if (posMode === 'REPAYMENT') {
       if (selectedCustomer.balance <= 0) {
         triggerToast('حساب الزبون خالص بالفعل ولا توجد ديون مستحقة');
@@ -228,65 +166,56 @@ export default function LuxuryStoreLedgerApp() {
       }
     }
 
-    const newTxId = `REC-${Math.floor(100 + Math.random() * 900)}`;
     const txDetails = posDetails || (posMode === 'REPAYMENT' ? 'سداد دفعة نقدية كاش' : 'شراء بضاعة على الحساب');
 
-    const newTx: CustomerTransaction = {
-      id: `tx-${Date.now()}`,
-      type: posMode,
-      amount: amountNum,
-      details: txDetails,
-      date: 'اليوم، الآن',
-      receiptNumber: newTxId,
-    };
+    try {
+      const recordedTx = await recordTransaction({
+        customerId: selectedCustomer.id,
+        amount: amountNum,
+        type: posMode,
+        details: txDetails,
+      });
 
-    const updated = customers.map((c) =>
-      c.id === selectedCustomer.id
-        ? {
-            ...c,
-            balance:
-              posMode === 'REPAYMENT'
-                ? Math.max(0, c.balance - amountNum)
-                : c.balance + amountNum,
-            lastActive: 'الآن',
-            transactions: [newTx, ...c.transactions],
-          }
-        : c
-    );
+      setActivePrintTx(recordedTx);
 
-    saveCustomersState(updated);
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+      const verifyUrl = `${origin}/verify?tx=${recordedTx.id}&type=${posMode}&amount=${amountNum}&customer=${encodeURIComponent(
+        selectedCustomer.name
+      )}&phone=${selectedCustomer.phone}&store=${encodeURIComponent(storeConfig.storeName)}&details=${encodeURIComponent(
+        txDetails
+      )}`;
 
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-    const verifyUrl = `${origin}/verify?tx=${newTxId}&type=${posMode}&amount=${amountNum}&customer=${encodeURIComponent(
-      selectedCustomer.name
-    )}&phone=${selectedCustomer.phone}&store=${encodeURIComponent(storeName)}&details=${encodeURIComponent(
-      txDetails
-    )}`;
+      const currentMode = posMode;
+      setPosMode(null);
+      setPosAmount('0');
+      setPosDetails('');
+      setQrDoneSuccess(false);
 
-    const currentMode = posMode;
-    setPosMode(null);
-    setPosAmount('0');
-    setPosDetails('');
-    setQrDoneSuccess(false);
+      setQrModalData({
+        url: verifyUrl,
+        type: currentMode,
+        amount: amountNum,
+        customerName: selectedCustomer.name,
+        customerPhone: selectedCustomer.phone,
+        details: txDetails,
+        receiptId: recordedTx.id,
+        previousBalance: recordedTx.previousBalance,
+        newBalance: recordedTx.newBalance,
+      });
 
-    setQrModalData({
-      url: verifyUrl,
-      type: currentMode,
-      amount: amountNum,
-      customerName: selectedCustomer.name,
-      details: txDetails,
-      receiptId: newTxId,
-    });
-
-    triggerToast(
-      currentMode === 'REPAYMENT'
-        ? `تم قيد سداد ${amountNum} ₪ لحساب ${selectedCustomer.name}`
-        : `تم قيد دين بقيمة ${amountNum} ₪ على ${selectedCustomer.name}`
-    );
+      triggerToast(
+        currentMode === 'REPAYMENT'
+          ? `تم حفظ سداد ${amountNum} ${storeConfig.currency} لحساب ${selectedCustomer.name} بقاعدة البيانات`
+          : `تم قيد دين بقيمة ${amountNum} ${storeConfig.currency} على ${selectedCustomer.name} بقاعدة البيانات`
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'فشل تنفيذ العملية';
+      triggerToast(`خطأ: ${msg}`);
+    }
   };
 
   // Create new customer with INITIAL DEBT & STRICT PALESTINIAN PHONE VALIDATION
-  const handleCreateCustomer = (e: React.FormEvent) => {
+  const handleCreateCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedName = newCustName.trim();
     if (!trimmedName || !newCustPhone) {
@@ -294,7 +223,7 @@ export default function LuxuryStoreLedgerApp() {
       return;
     }
 
-    // Strict Palestinian phone validation (Jawwal 059 / Ooredoo 056)
+    // Strict Palestinian phone validation
     const phoneCheck = validatePalestinianPhone(newCustPhone);
     if (!phoneCheck.isValid || !phoneCheck.normalized) {
       triggerToast(phoneCheck.error || 'رقم جوال غير صالح، يجب أن يبدأ بـ 059 أو 056 ويتكون من 10 أرقام');
@@ -312,51 +241,70 @@ export default function LuxuryStoreLedgerApp() {
 
     const initialDebtNum = parseFloat(newCustInitialDebt) || 0;
     const initialReason = newCustDebtReason || 'رصيد دين افتتاحي';
-    const newTxId = `REC-${Math.floor(100 + Math.random() * 900)}`;
 
-    const initialTransactions: CustomerTransaction[] =
-      initialDebtNum > 0
-        ? [
-            {
-              id: `tx-${Date.now()}`,
-              type: 'DEBT',
-              amount: initialDebtNum,
-              details: initialReason,
-              date: 'اليوم، الآن',
-              receiptNumber: newTxId,
-            },
-          ]
-        : [];
+    try {
+      const newCust = await createCustomer({
+        name: trimmedName,
+        phone: validatedPhone,
+        balance: 0,
+        debtCeiling: parseFloat(newCustCeiling) || 500,
+        notes: 'زبون مسجل حديثاً',
+      });
 
-    const newCust: Customer = {
-      id: `cust-${Date.now()}`,
-      name: trimmedName,
-      phone: validatedPhone,
-      balance: initialDebtNum,
-      debtCeiling: parseFloat(newCustCeiling) || 500,
-      lastActive: 'الآن (جديد)',
-      tag: initialDebtNum > 0 ? 'REGULAR' : 'VIP',
-      transactions: initialTransactions,
-    };
+      // If there was an initial debt, record it in the ledger
+      if (initialDebtNum > 0) {
+        await recordTransaction({
+          customerId: newCust.id,
+          amount: initialDebtNum,
+          type: 'DEBT',
+          details: initialReason,
+        });
+      }
 
-    const updated = [newCust, ...customers];
-    saveCustomersState(updated);
-    setSelectedCustomerId(newCust.id);
+      setSelectedCustomerId(newCust.id);
+      setShowNewCustomerModal(false);
+      setNewCustName('');
+      setNewCustPhone('');
+      setNewCustInitialDebt('50');
+      setNewCustDebtReason('رصيد دين سابق / مشتريات');
 
-    setShowNewCustomerModal(false);
-    setNewCustName('');
-    setNewCustPhone('');
-    setNewCustInitialDebt('50');
-    setNewCustDebtReason('رصيد دين سابق / مشتريات');
+      triggerToast(
+        initialDebtNum > 0
+          ? `تمت إضافة ${trimmedName} برصيد دين ${initialDebtNum} ${storeConfig.currency}`
+          : `تمت إضافة الزبون ${trimmedName} إلى الدفتر بنجاح`
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'فشل إضافة الزبون';
+      triggerToast(`خطأ: ${msg}`);
+    }
+  };
 
-    triggerToast(
-      initialDebtNum > 0
-        ? `تمت إضافة ${trimmedName} برصيد دين ${initialDebtNum} ₪`
-        : `تمت إضافة الزبون ${trimmedName} إلى الدفتر`
-    );
+  // Delete individual customer
+  const handleDeleteCustomer = async (customerId: string, customerName: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (
+      typeof window !== 'undefined' &&
+      window.confirm(`هل أنت متأكد من حذف حساب الزبون (${customerName}) نهائياً من دفتر الديون؟`)
+    ) {
+      await deleteCustomer(customerId);
+      if (selectedCustomerId === customerId) {
+        const remaining = customers.filter((c) => c.id !== customerId);
+        setSelectedCustomerId(remaining.length > 0 ? remaining[0].id : null);
+      }
+      triggerToast(`تم حذف حساب الزبون (${customerName}) نهائياً من قاعدة البيانات`);
+    }
   };
 
   const isDark = themeMode === 'LUXURY';
+
+  if (!isReady) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 text-white">
+        <DaftarLogo size={48} showText={true} />
+        <p className="text-xs text-slate-400 mt-4 animate-pulse">جاري تحميل دفتر المحل وقاعدة البيانات المحلية...</p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -364,6 +312,36 @@ export default function LuxuryStoreLedgerApp() {
         isDark ? 'bg-theme-luxury text-slate-100' : 'bg-theme-day text-slate-800'
       }`}
     >
+      {/* Thermal Receipt Hidden Component (Revealed during window.print()) */}
+      <ThermalReceipt transaction={activePrintTx} storeConfig={storeConfig} />
+
+      {/* Camera QR Scanner Modal */}
+      <CameraQRScanner
+        isOpen={showCameraScanner}
+        onClose={() => setShowCameraScanner(false)}
+        onScanSuccess={(decodedText) => {
+          setShowCameraScanner(false);
+          triggerToast('تم فحص السند بنجاح! جاري فتح كشف التوثيق...');
+          if (decodedText.startsWith('http')) {
+            window.open(decodedText, '_blank');
+          } else {
+            alert(`بيانات السند الممسوح: ${decodedText}`);
+          }
+        }}
+      />
+
+      {/* Store Settings & Backup Modal */}
+      <StoreSettingsModal
+        isOpen={showStoreSettingsModal}
+        onClose={() => setShowStoreSettingsModal(false)}
+        config={storeConfig}
+        onSaveConfig={updateStoreConfig}
+        onExportBackup={exportBackup}
+        onImportBackup={importBackup}
+        onResetFactory={resetFactory}
+        triggerToast={triggerToast}
+      />
+
       {/* Floating Modern Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 animate-in fade-in slide-in-from-bottom-4 duration-200">
@@ -377,9 +355,7 @@ export default function LuxuryStoreLedgerApp() {
       {/* Top Header - Spacious & Clean */}
       <header
         className={`border-b sticky top-0 z-30 px-4 lg:px-8 py-3 backdrop-blur-md transition-colors ${
-          isDark
-            ? 'bg-slate-950/85 border-slate-800/80'
-            : 'bg-white/95 border-slate-200 shadow-xs'
+          isDark ? 'bg-slate-950/85 border-slate-800/80' : 'bg-white/95 border-slate-200 shadow-xs'
         }`}
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -390,14 +366,26 @@ export default function LuxuryStoreLedgerApp() {
             <div className="hidden sm:flex flex-col">
               <span className={`text-xs font-bold flex items-center gap-1.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
                 <Store className="w-3.5 h-3.5 text-emerald-500" />
-                {storeName}
+                {storeConfig.storeName}
               </span>
-              <span className="text-[11px] text-slate-400">{storeOwner} • {storeLocation}</span>
+              <span className="text-[11px] text-slate-400">
+                {storeConfig.ownerName} • {storeConfig.location}
+              </span>
             </div>
           </div>
 
-          {/* Clean Controls */}
+          {/* Clean Controls & Action Buttons */}
           <div className="flex items-center gap-2">
+            {/* Camera QR Scanner */}
+            <button
+              onClick={() => setShowCameraScanner(true)}
+              className="flex items-center gap-1.5 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95"
+              title="مسح رمز السند المطبوع بالكاميرا"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">مسح بالكاميرا</span>
+            </button>
+
             {/* Theme Switcher */}
             <button
               onClick={() => setThemeMode(isDark ? 'DAY' : 'LUXURY')}
@@ -412,7 +400,7 @@ export default function LuxuryStoreLedgerApp() {
               <span className="hidden sm:inline">{isDark ? 'نهاري' : 'ليلي'}</span>
             </button>
 
-            {/* Store Settings Button */}
+            {/* Store Settings & Backup Button */}
             <button
               onClick={() => setShowStoreSettingsModal(true)}
               className={`p-2 rounded-xl border transition-all ${
@@ -420,7 +408,7 @@ export default function LuxuryStoreLedgerApp() {
                   ? 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white'
                   : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
               }`}
-              title="تخصيص بيانات المحل"
+              title="تخصيص بيانات المحل والنسخ الاحتياطي"
             >
               <Settings className="w-4 h-4" />
             </button>
@@ -441,11 +429,10 @@ export default function LuxuryStoreLedgerApp() {
             </div>
             <div className="my-1.5">
               <span className="text-2xl lg:text-3xl font-black text-amber-500 font-mono">{totalOutstandingBalance}</span>
-              <span className="text-xs font-bold text-slate-400 mr-1.5">₪ شيكل</span>
+              <span className="text-xs font-bold text-slate-400 mr-1.5">{storeConfig.currency}</span>
             </div>
             <p className="text-[11px] text-slate-400">في ذمة {activeDebtorsCount} زبائن حتى اللحظة</p>
           </div>
-
 
           {/* Card 2: Debtors Count */}
           <div className={`p-4 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
@@ -465,7 +452,7 @@ export default function LuxuryStoreLedgerApp() {
           {/* Card 3: Overdue Alert Count */}
           <div className={`p-4 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
             <div className="flex justify-between items-start">
-              <span className="text-xs font-bold text-slate-400">ديون متأخرة المتابعة</span>
+              <span className="text-xs font-bold text-slate-400">ديون متجاوزة للسقف</span>
               <div className="w-8 h-8 rounded-xl bg-red-500/10 text-red-400 flex items-center justify-center">
                 <AlertCircle className="w-4 h-4" />
               </div>
@@ -474,7 +461,7 @@ export default function LuxuryStoreLedgerApp() {
               <span className="text-2xl lg:text-3xl font-black text-red-400 font-mono">{overdueCount}</span>
               <span className="text-xs font-bold text-slate-400 mr-1.5">حالات</span>
             </div>
-            <p className="text-[11px] text-red-400/90 font-medium">تجاوزت سقف أو وقت السداد</p>
+            <p className="text-[11px] text-red-400/90 font-medium">تجاوزت سقف الدين المحدد</p>
           </div>
         </div>
       </section>
@@ -492,21 +479,12 @@ export default function LuxuryStoreLedgerApp() {
                 دفتر الزبائن ({customers.length})
               </span>
               <div className="flex items-center gap-1.5">
-                {customers.length > 0 && (
-                  <button
-                    onClick={handleResetAllData}
-                    className="p-1.5 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition-all text-xs"
-                    title="تصفير ومسح كافة الزبائن من الدفتر"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
                 <button
                   onClick={() => setShowNewCustomerModal(true)}
                   className="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md shadow-emerald-600/20 transition-all"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
-                  زبون مديون جديد
+                  زبون جديد
                 </button>
               </div>
             </div>
@@ -531,25 +509,37 @@ export default function LuxuryStoreLedgerApp() {
             <div className={`grid grid-cols-4 gap-1 p-1 rounded-xl text-[10px] font-bold ${isDark ? 'bg-slate-950/80' : 'bg-slate-100'}`}>
               <button
                 onClick={() => setCustomerFilter('ALL')}
-                className={`py-1 rounded-lg transition-all ${customerFilter === 'ALL' ? (isDark ? 'bg-slate-800 text-white' : 'bg-white text-slate-900 shadow-xs') : 'text-slate-400'}`}
+                className={`py-1 rounded-lg transition-all ${
+                  customerFilter === 'ALL'
+                    ? isDark
+                      ? 'bg-slate-800 text-white'
+                      : 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-400'
+                }`}
               >
                 الكل ({customers.length})
               </button>
               <button
                 onClick={() => setCustomerFilter('DEBTORS')}
-                className={`py-1 rounded-lg transition-all ${customerFilter === 'DEBTORS' ? 'bg-amber-500 text-slate-950 font-black' : 'text-slate-400'}`}
+                className={`py-1 rounded-lg transition-all ${
+                  customerFilter === 'DEBTORS' ? 'bg-amber-500 text-slate-950 font-black' : 'text-slate-400'
+                }`}
               >
                 مديونين ({activeDebtorsCount})
               </button>
               <button
                 onClick={() => setCustomerFilter('OVERDUE')}
-                className={`py-1 rounded-lg transition-all ${customerFilter === 'OVERDUE' ? 'bg-red-500 text-white font-black' : 'text-slate-400'}`}
+                className={`py-1 rounded-lg transition-all ${
+                  customerFilter === 'OVERDUE' ? 'bg-red-500 text-white font-black' : 'text-slate-400'
+                }`}
               >
-                متأخرين ({overdueCount})
+                تجاوز ({overdueCount})
               </button>
               <button
                 onClick={() => setCustomerFilter('CLEARED')}
-                className={`py-1 rounded-lg transition-all ${customerFilter === 'CLEARED' ? 'bg-emerald-500 text-slate-950 font-black' : 'text-slate-400'}`}
+                className={`py-1 rounded-lg transition-all ${
+                  customerFilter === 'CLEARED' ? 'bg-emerald-500 text-slate-950 font-black' : 'text-slate-400'
+                }`}
               >
                 خالصين
               </button>
@@ -565,7 +555,7 @@ export default function LuxuryStoreLedgerApp() {
                 </div>
                 <div>
                   <h4 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-800'}`}>الدفتر فارغ تماماً</h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5">اضغط على «زبون مديون جديد» لتسجيل أول حساب في محلك.</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">اضغط على «زبون جديد» لتسجيل أول حساب في محلك.</p>
                 </div>
                 <button
                   onClick={() => setShowNewCustomerModal(true)}
@@ -578,56 +568,74 @@ export default function LuxuryStoreLedgerApp() {
             ) : (
               filteredCustomers.map((cust) => {
                 const isSelected = cust.id === selectedCustomer?.id;
+                const isCleared = cust.balance === 0;
+                const isOverdue = cust.balance > cust.debtCeiling;
+
                 return (
                   <div
                     key={cust.id}
                     onClick={() => setSelectedCustomerId(cust.id)}
-                    className={`cursor-pointer rounded-2xl p-3.5 border transition-all flex items-center justify-between ${
+                    className={`p-3.5 rounded-2xl cursor-pointer transition-all border flex items-center justify-between group ${
                       isSelected
                         ? isDark
-                          ? 'bg-emerald-950/40 border-emerald-500 shadow-md shadow-emerald-500/10'
-                          : 'bg-emerald-50 border-emerald-500 shadow-xs'
+                          ? 'bg-slate-850 border-emerald-500 shadow-md ring-1 ring-emerald-500/30'
+                          : 'bg-emerald-50/60 border-emerald-500 shadow-xs ring-1 ring-emerald-500/20'
                         : isDark
-                        ? 'bg-slate-900/40 border-slate-800/80 hover:border-slate-700'
-                        : 'bg-white border-slate-200/90 hover:border-slate-300 shadow-xs'
+                        ? 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700'
+                        : 'bg-white border-slate-200/80 hover:border-slate-300'
                     }`}
                   >
                     <div className="flex items-center gap-3">
+                      {/* Avatar */}
                       <div
-                        className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm ${
-                          cust.balance > 0
-                            ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                            : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                          isCleared
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : isOverdue
+                            ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                         }`}
                       >
                         {cust.name.slice(0, 1)}
                       </div>
-                      <div>
+
+                      <div className="flex flex-col">
                         <div className="flex items-center gap-1.5">
-                          <h3 className={`text-xs font-bold leading-snug ${isDark ? 'text-white' : 'text-slate-900'}`}>{cust.name}</h3>
-                          {cust.tag === 'VIP' && (
-                            <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.2 rounded font-bold">VIP</span>
-                          )}
-                          {cust.tag === 'OVERDUE' && (
-                            <span className="text-[9px] bg-red-500/20 text-red-400 px-1.5 py-0.2 rounded font-bold">متأخر</span>
+                          <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                            {cust.name}
+                          </span>
+                          {isOverdue && (
+                            <span className="text-[9px] bg-red-500/15 text-red-400 border border-red-500/30 px-1.5 py-0.2 rounded font-bold">
+                              متجاوز السقف
+                            </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
-                          <Phone className="w-3 h-3 text-slate-500" />
-                          {cust.phone}
-                        </p>
+                        <span className="text-[10px] text-slate-400 font-mono tracking-tight">{cust.phone}</span>
                       </div>
                     </div>
 
-                    <div className="text-left">
-                      <div
-                        className={`text-sm font-black font-mono ${
-                          cust.balance > 0 ? 'text-amber-500' : 'text-emerald-400'
-                        }`}
-                      >
-                        {cust.balance > 0 ? `${cust.balance} ₪` : 'خالص 0 ₪'}
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-col items-end">
+                        <span
+                          className={`text-sm font-black font-mono ${
+                            isCleared ? 'text-emerald-400' : isOverdue ? 'text-red-400' : 'text-amber-400'
+                          }`}
+                        >
+                          {isCleared ? 'خالص' : `${cust.balance} ${storeConfig.currency}`}
+                        </span>
+                        <span className="text-[9px] text-slate-500">
+                          سقف: {cust.debtCeiling} {storeConfig.currency}
+                        </span>
                       </div>
-                      <span className="text-[10px] text-slate-400 block">{cust.lastActive}</span>
+
+                      {/* Delete Customer Button */}
+                      <button
+                        onClick={(e) => handleDeleteCustomer(cust.id, cust.name, e)}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                        title="حذف الزبون"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 );
@@ -636,286 +644,262 @@ export default function LuxuryStoreLedgerApp() {
           </div>
         </section>
 
-        {/* Right Column (Customer Statement & History Table) - 8 Columns */}
+        {/* Right Column (Customer Statement & POS Controls) - 8 Columns */}
         <section className="lg:col-span-8 flex flex-col gap-4">
           {selectedCustomer ? (
             <>
               {/* Customer Statement Header Card */}
-              <div className={`p-5 sm:p-6 rounded-3xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
-                <div>
-                  <span className="text-[11px] font-bold text-emerald-500 block mb-0.5">كشف حساب الزبون المختار:</span>
-                  <h2 className={`text-xl font-black flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    {selectedCustomer.name}
-                    <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-lg border ${isDark ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
-                      {selectedCustomer.phone}
-                    </span>
-                  </h2>
-                  
-                  {/* Debt Headroom Progress */}
-                  <div className="flex items-center gap-2 mt-2 text-xs text-slate-400">
-                    <span>سقف الدين المتاح: <strong>{selectedCustomer.debtCeiling} ₪</strong></span>
-                    <span>•</span>
-                    <span>المتبقي من السقف: <strong className="text-emerald-400">{Math.max(0, selectedCustomer.debtCeiling - selectedCustomer.balance)} ₪</strong></span>
+              <div className={`p-5 rounded-3xl border ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/60">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-black flex items-center justify-center text-lg shadow-lg">
+                      {selectedCustomer.name.slice(0, 1)}
+                    </div>
+                    <div>
+                      <h2 className={`text-base font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                        كشف حساب: {selectedCustomer.name}
+                      </h2>
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400 font-mono">
+                        <Phone className="w-3.5 h-3.5 text-slate-400" />
+                        <span>{selectedCustomer.phone}</span>
+                        <span>•</span>
+                        <span>سقف الدين: {selectedCustomer.debtCeiling} {storeConfig.currency}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Financial Status Pill */}
+                  <div className="flex items-center gap-3 bg-slate-950/60 border border-slate-800/80 p-3 rounded-2xl">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-slate-400">الرصيد المستحق بذمته:</span>
+                      <span
+                        className={`text-xl font-black font-mono ${
+                          selectedCustomer.balance === 0 ? 'text-emerald-400' : 'text-amber-400'
+                        }`}
+                      >
+                        {selectedCustomer.balance === 0 ? 'خالص (0 ₪)' : `${selectedCustomer.balance} ${storeConfig.currency}`}
+                      </span>
+                    </div>
+
+                    <div className="h-8 w-px bg-slate-800" />
+
+                    <div className="flex flex-col text-[10px] text-slate-400">
+                      <span>المتبقي من السقف:</span>
+                      <span className="font-bold text-white font-mono">
+                        {Math.max(0, selectedCustomer.debtCeiling - selectedCustomer.balance)} {storeConfig.currency}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Outstanding Balance Banner & Master Action Buttons */}
-                <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                  <div className={`px-5 py-2.5 rounded-2xl text-center sm:text-right border ${isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-                    <span className="text-[10px] font-bold text-slate-400 block">الرصيد المستحق في ذمته</span>
-                    <span className={`text-2xl font-black font-mono ${selectedCustomer.balance > 0 ? 'text-amber-500' : 'text-emerald-400'}`}>
-                      {selectedCustomer.balance} ₪
-                    </span>
-                  </div>
+                {/* Primary Action Buttons: Settle Debt / Add Debt */}
+                <div className="flex flex-wrap items-center gap-2.5 pt-4">
+                  {/* Settle Debt Button */}
+                  <button
+                    onClick={() => {
+                      if (selectedCustomer.balance <= 0) {
+                        triggerToast(`حساب الزبون (${selectedCustomer.name}) خالص ولا توجد ديون مستحقة`);
+                        return;
+                      }
+                      setPosMode('REPAYMENT');
+                      setPosAmount('0');
+                    }}
+                    className={`flex-1 sm:flex-none font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-all ${
+                      selectedCustomer.balance <= 0
+                        ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50 shadow-none'
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{selectedCustomer.balance <= 0 ? 'خالص (لا يوجد دين)' : 'سداد دفعة نقدية'}</span>
+                  </button>
 
-                  <div className="flex items-center gap-2 flex-1 sm:flex-none">
-                    {/* Settle Debt Button */}
-                    <button
-                      onClick={() => {
-                        if (selectedCustomer.balance <= 0) {
-                          triggerToast(`حساب الزبون (${selectedCustomer.name}) خالص ولا توجد ديون مستحقة`);
-                          return;
-                        }
-                        setPosMode('REPAYMENT');
-                        setPosAmount('0');
-                      }}
-                      className={`flex-1 sm:flex-none font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-all ${
-                        selectedCustomer.balance <= 0
-                          ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50 shadow-none'
-                          : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
-                      }`}
-                      title={selectedCustomer.balance <= 0 ? 'الزبون خالص ولا توجد ديون' : 'سداد دفعة من الدين'}
-                    >
-                      <CreditCard className="w-4 h-4" />
-                      <span>{selectedCustomer.balance <= 0 ? 'خالص (0 ₪)' : 'سداد دفعة'}</span>
-                    </button>
+                  {/* Add Debt Button */}
+                  <button
+                    onClick={() => {
+                      setPosMode('DEBT');
+                      setPosAmount('0');
+                    }}
+                    className="flex-1 sm:flex-none bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    <span>تسجيل دين بضاعة</span>
+                  </button>
 
-                    {/* Add Debt Button */}
-                    <button
-                      onClick={() => {
-                        setPosMode('DEBT');
-                        setPosAmount('0');
-                      }}
-                      className="flex-1 sm:flex-none bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
-                    >
-                      <PlusCircle className="w-4 h-4" />
-                      <span>تسجيل دين</span>
-                    </button>
-
-                    {/* Send WhatsApp Statement */}
-                    <a
-                      href={`https://api.whatsapp.com/send?phone=${selectedCustomer.phone.replace(/^0/, '970')}&text=${encodeURIComponent(
-                        `مرحباً ${selectedCustomer.name}، كشف حسابك الحالي لدى ${storeName}:%0Aالرصيد القائم بذمتك: ${selectedCustomer.balance} شيكل.`
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`p-2.5 rounded-xl text-xs border transition-all ${isDark ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900'}`}
-                      title="إرسال كشف الحساب عبر واتساب"
-                    >
-                      <Share2 className="w-4 h-4" />
-                    </a>
-
-                    {/* Delete Customer Button */}
-                    <button
-                      onClick={() => handleDeleteCustomer(selectedCustomer.id, selectedCustomer.name)}
-                      className={`p-2.5 rounded-xl text-xs border transition-all ${
-                        isDark
-                          ? 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20'
-                          : 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100'
-                      }`}
-                      title={`حذف حساب ${selectedCustomer.name} نهائياً من الدفتر`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {/* Print Statement Button */}
+                  <button
+                    onClick={() => {
+                      if (customerTransactions.length > 0) {
+                        setActivePrintTx(customerTransactions[0]);
+                        setTimeout(() => window.print(), 100);
+                      } else {
+                        triggerToast('لا توجد حركات لطباعة سند');
+                      }
+                    }}
+                    className="flex-1 sm:flex-none bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                    title="طباعة آخر إيصال حراري"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>طباعة آخر سند</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Detailed Statement Ledger Table (Always visible and clean!) */}
-              <div className={`p-5 rounded-3xl border ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800/60">
-                  <h3 className={`text-xs font-black flex items-center gap-1.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              {/* Transactions Ledger Log */}
+              <div className={`p-5 rounded-3xl border flex-1 ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <span className={`text-xs font-black flex items-center gap-1.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
                     <FileText className="w-4 h-4 text-emerald-500" />
-                    حركات الحساب التفصيلية ({selectedCustomer.transactions.length})
-                  </h3>
-                  <span className="text-[11px] text-slate-400">سجل زمني موثق لكافة الديون والدفعات</span>
+                    سجل المعاملات والتوثيق ({customerTransactions.length})
+                  </span>
+                  <span className="text-[10px] text-slate-400">سجل مشفر غير قابل للتعديل</span>
                 </div>
 
-                {selectedCustomer.transactions.length === 0 ? (
-                  <div className="py-12 text-center text-slate-400 text-xs">
-                    لا توجد حركات مسجلة لهذا الزبون حتى الآن.
-                  </div>
-                ) : (
-                  <div className="divide-y divide-slate-800/40">
-                    {selectedCustomer.transactions.map((tx) => (
-                      <div key={tx.id} className="py-3.5 flex items-center justify-between hover:bg-slate-800/30 px-2 rounded-xl transition-colors">
+                <div className="flex flex-col gap-2.5 max-h-[380px] overflow-y-auto pr-1">
+                  {customerTransactions.length === 0 ? (
+                    <div className="text-center py-10 text-slate-500 text-xs">
+                      لا توجد حركات مسجلة لهذا الزبون حتى الآن.
+                    </div>
+                  ) : (
+                    customerTransactions.map((tx) => (
+                      <div
+                        key={tx.id}
+                        className={`p-3 rounded-2xl border flex items-center justify-between text-xs transition-all ${
+                          tx.type === 'REPAYMENT'
+                            ? isDark
+                              ? 'bg-emerald-950/20 border-emerald-500/20'
+                              : 'bg-emerald-50/50 border-emerald-200'
+                            : isDark
+                            ? 'bg-amber-950/20 border-amber-500/20'
+                            : 'bg-amber-50/50 border-amber-200'
+                        }`}
+                      >
                         <div className="flex items-center gap-3">
                           <div
-                            className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold ${
+                            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
                               tx.type === 'REPAYMENT'
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                                ? 'bg-emerald-500/20 text-emerald-400'
+                                : 'bg-amber-500/20 text-amber-400'
                             }`}
                           >
-                            {tx.type === 'REPAYMENT' ? (
-                              <ArrowDownLeft className="w-4 h-4" />
-                            ) : (
-                              <ArrowUpRight className="w-4 h-4" />
-                            )}
+                            {tx.type === 'REPAYMENT' ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
                           </div>
 
-                          <div>
-                            <div className={`text-xs font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                              <span>{tx.details}</span>
-                              <span className="text-[10px] font-mono text-slate-400 bg-slate-800/40 px-1.5 py-0.2 rounded">
-                                {tx.receiptNumber}
-                              </span>
-                            </div>
-                            <span className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-                              <Calendar className="w-3 h-3 text-slate-500" />
-                              {tx.date}
+                          <div className="flex flex-col">
+                            <span className={`font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                              {tx.type === 'REPAYMENT' ? 'سداد دفعة' : 'تسجيل دين'}: {tx.details}
                             </span>
+                            <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                              <span>{new Date(tx.timestamp).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                              <span>•</span>
+                              <span className="font-mono text-[9px]">كود: {tx.id}</span>
+                            </div>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-3">
-                          <span
-                            className={`text-base font-black font-mono ${
-                              tx.type === 'REPAYMENT' ? 'text-emerald-400' : 'text-amber-500'
-                            }`}
-                          >
-                            {tx.type === 'REPAYMENT' ? `-${tx.amount}` : `+${tx.amount}`} ₪
-                          </span>
+                          <div className="flex flex-col items-end">
+                            <span
+                              className={`text-sm font-black font-mono ${
+                                tx.type === 'REPAYMENT' ? 'text-emerald-400' : 'text-amber-400'
+                              }`}
+                            >
+                              {tx.type === 'REPAYMENT' ? `-${tx.amount}` : `+${tx.amount}`} {storeConfig.currency}
+                            </span>
+                            <span className="text-[10px] text-slate-500">
+                              الرصيد بعدها: {tx.newBalance} {storeConfig.currency}
+                            </span>
+                          </div>
 
-                          {/* Open Scannable QR modal */}
+                          {/* Print single thermal receipt button */}
                           <button
                             onClick={() => {
-                              const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-                              const verifyUrl = `${origin}/verify?tx=${tx.receiptNumber}&type=${tx.type}&amount=${tx.amount}&customer=${encodeURIComponent(
-                                selectedCustomer.name
-                              )}&phone=${selectedCustomer.phone}&store=${encodeURIComponent(storeName)}&details=${encodeURIComponent(
-                                tx.details
-                              )}&date=${encodeURIComponent(tx.date)}`;
-
-                              setQrDoneSuccess(false);
-                              setQrModalData({
-                                url: verifyUrl,
-                                type: tx.type,
-                                amount: tx.amount,
-                                customerName: selectedCustomer.name,
-                                details: tx.details,
-                                receiptId: tx.receiptNumber,
-                              });
+                              setActivePrintTx(tx);
+                              setTimeout(() => window.print(), 100);
                             }}
-                            className={`p-2 rounded-lg text-xs border transition-all ${
-                              isDark
-                                ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-emerald-400'
-                                : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-emerald-600'
-                            }`}
-                            title="عرض كود الـ QR"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+                            title="طباعة إيصال حراري"
                           >
-                            <QrCode className="w-4 h-4" />
+                            <Printer className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    ))
+                  )}
+                </div>
               </div>
             </>
           ) : (
-            /* Welcome / Zeroed State on Right Panel */
-            <div className={`p-12 rounded-3xl border text-center flex flex-col items-center justify-center gap-4 ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
-              <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-                <Store className="w-8 h-8" />
-              </div>
-              <div>
-                <h3 className={`text-lg font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  دفتر حسابات {storeName} جاهز تماماً
-                </h3>
-                <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                  تم تصفير كافة السجلات بنجاح لتتمكن من إضافة زبائنك الحقيقيين وتسجيل ديونهم ودفعاتهم بدقة وسهولة.
-                </p>
-              </div>
-              <button
-                onClick={() => setShowNewCustomerModal(true)}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white font-black px-5 py-2.5 rounded-2xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all mt-2"
-              >
-                <UserPlus className="w-4 h-4" />
-                <span>إضافة أول زبون مديون الآن</span>
-              </button>
+            <div className={`p-12 rounded-3xl border text-center flex flex-col items-center justify-center gap-3 ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
+              <Users className="w-12 h-12 text-slate-600" />
+              <h3 className="font-bold text-sm">اختر زبوناً من القائمة لعرض كشف الحساب</h3>
             </div>
           )}
         </section>
       </main>
 
-      {/* POS NUMPAD MODAL (FOCUSED & CLEAN, NOT CLUTTERING SCREEN) */}
+      {/* POS Keypad Modal (Smart Numpad with Strict Boundary Constraints) */}
       {posMode && selectedCustomer && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className={`w-full max-w-md rounded-3xl p-6 flex flex-col gap-4 shadow-2xl relative animate-in fade-in zoom-in-95 border ${
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className={`w-full max-w-sm rounded-3xl p-5 flex flex-col gap-4 shadow-2xl border ${
             isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
           }`}>
-            <div className="flex items-center justify-between">
-              <h3 className={`text-base font-black flex items-center gap-2 ${posMode === 'REPAYMENT' ? 'text-emerald-500' : 'text-amber-500'}`}>
-                {posMode === 'REPAYMENT' ? <CreditCard className="w-5 h-5" /> : <PlusCircle className="w-5 h-5" />}
-                {posMode === 'REPAYMENT' ? `سداد دفعة نقدية من: ${selectedCustomer.name}` : `تسجيل دين على: ${selectedCustomer.name}`}
-              </h3>
-              <button onClick={() => setPosMode(null)} className="text-slate-400 hover:text-white p-1">
-                <X className="w-5 h-5" />
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Calculator className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-black text-sm">
+                  {posMode === 'REPAYMENT' ? `سداد دفعة من: ${selectedCustomer.name}` : `تسجيل دين على: ${selectedCustomer.name}`}
+                </h3>
+              </div>
+              <button
+                onClick={() => setPosMode(null)}
+                className="p-1 rounded-full text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Display Screen & Live Balance Calculations */}
             {(() => {
               const enteredAmount = parseFloat(posAmount) || 0;
               const isOverpaying = posMode === 'REPAYMENT' && enteredAmount > selectedCustomer.balance;
               const remainingAfterRepay = Math.max(0, selectedCustomer.balance - enteredAmount);
-              const totalAfterDebt = selectedCustomer.balance + enteredAmount;
-              const exceedsCeiling = posMode === 'DEBT' && totalAfterDebt > selectedCustomer.debtCeiling;
 
               return (
                 <>
-                  <div className={`p-4 rounded-2xl border text-center ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-                    <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5">
-                      <span>{posMode === 'REPAYMENT' ? 'الدين القائم بذمته حالياً:' : 'الرصيد القائم قبل العملية:'}</span>
-                      <span className="font-bold text-amber-400 font-mono text-sm">{selectedCustomer.balance} ₪</span>
-                    </div>
-
-                    <span className="text-[11px] text-slate-400 block mb-0.5">المبلغ المحدد للعملية:</span>
-                    <div className="text-4xl font-black font-mono flex items-center justify-center gap-2">
-                      <span className={posMode === 'REPAYMENT' ? (isOverpaying ? 'text-red-400' : 'text-emerald-400') : 'text-amber-400'}>
+                  {/* Amount Display */}
+                  <div className={`p-4 rounded-2xl text-center border transition-all ${
+                    isOverpaying
+                      ? 'bg-red-500/10 border-red-500/50'
+                      : isDark
+                      ? 'bg-slate-950 border-slate-800'
+                      : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <span className="text-[10px] text-slate-400 block mb-1">المبلغ المراد تسجيله:</span>
+                    <div className="text-3xl font-black font-mono flex items-center justify-center gap-1.5">
+                      <span className={isOverpaying ? 'text-red-400' : isDark ? 'text-white' : 'text-slate-900'}>
                         {posAmount}
                       </span>
-                      <span className="text-lg text-slate-400">₪</span>
+                      <span className="text-sm font-bold text-amber-400">{storeConfig.currency}</span>
                     </div>
 
-                    {/* Dynamic Real-time Calculations & Constraints */}
-                    {posMode === 'REPAYMENT' ? (
-                      isOverpaying ? (
-                        <div className="mt-2.5 p-2 rounded-xl bg-red-500/10 border border-red-500/30 text-center animate-in fade-in">
-                          <span className="text-[11px] font-bold text-red-400 block">
-                            ⚠️ خطأ: مبلغ السداد ({enteredAmount} ₪) يتجاوز الدين المستحق ({selectedCustomer.balance} ₪)! الحد الأقصى للسداد هو {selectedCustomer.balance} ₪ فقط.
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="mt-2.5 flex items-center justify-between text-xs pt-2 border-t border-slate-800/60">
-                          <span className="text-slate-400">المتبقي بذمته بعد السداد:</span>
-                          <span className={`font-bold font-mono ${remainingAfterRepay === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                            {remainingAfterRepay} ₪ {remainingAfterRepay === 0 && '(خالص تماماً ✓)'}
-                          </span>
-                        </div>
-                      )
-                    ) : (
-                      <div className="mt-2.5 flex items-center justify-between text-xs pt-2 border-t border-slate-800/60">
-                        <span className="text-slate-400">الرصيد بعد إضافة الدين:</span>
-                        <span className={`font-bold font-mono ${exceedsCeiling ? 'text-red-400' : 'text-amber-400'}`}>
-                          {totalAfterDebt} ₪ {exceedsCeiling && '(تجاوز السقف!)'}
+                    {posMode === 'REPAYMENT' && (
+                      <div className="mt-2 text-[11px] flex justify-between px-2 pt-2 border-t border-slate-800/60">
+                        <span className="text-slate-400">الدين الحالي: {selectedCustomer.balance} {storeConfig.currency}</span>
+                        <span className={`font-bold ${isOverpaying ? 'text-red-400' : 'text-emerald-400'}`}>
+                          المتبقي بعد السداد: {remainingAfterRepay} {storeConfig.currency}
                         </span>
                       </div>
                     )}
                   </div>
 
-                  {/* Quick Amount Chips */}
+                  {isOverpaying && (
+                    <div className="p-2.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-[11px] font-bold flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>مبلغ السداد يتجاوز إجمالي الدين المستحق ({selectedCustomer.balance} {storeConfig.currency})!</span>
+                    </div>
+                  )}
+
+                  {/* Quick Preset Chips */}
                   <div className="flex flex-wrap gap-1.5 justify-center">
                     {[10, 20, 50, 100]
                       .filter((amt) => posMode !== 'REPAYMENT' || amt <= selectedCustomer.balance)
@@ -923,11 +907,9 @@ export default function LuxuryStoreLedgerApp() {
                         <button
                           key={amt}
                           onClick={() => setPosAmount(amt.toString())}
-                          className={`font-bold px-3 py-1 rounded-xl text-xs transition-all border ${
-                            isDark ? 'bg-slate-800 border-slate-700 text-slate-200 hover:border-emerald-500' : 'bg-slate-100 border-slate-300 text-slate-800 hover:border-emerald-500'
-                          }`}
+                          className="font-bold px-3 py-1 rounded-xl text-xs bg-slate-800 border border-slate-700 text-slate-200 hover:border-emerald-500 transition-all"
                         >
-                          +{amt} ₪
+                          +{amt} {storeConfig.currency}
                         </button>
                       ))}
                     {posMode === 'REPAYMENT' && selectedCustomer.balance > 0 && (
@@ -935,25 +917,25 @@ export default function LuxuryStoreLedgerApp() {
                         onClick={() => setPosAmount(selectedCustomer.balance.toString())}
                         className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1 rounded-xl text-xs"
                       >
-                        سداد كامل الدين ({selectedCustomer.balance} ₪)
+                        سداد كامل الدين ({selectedCustomer.balance} {storeConfig.currency})
                       </button>
                     )}
                   </div>
 
-                  {/* Tactile Keypad */}
+                  {/* Numpad */}
                   <div dir="ltr" className="grid grid-cols-3 gap-2 text-base font-bold font-mono">
                     {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'CLEAR', '0', 'BACK'].map((key) => (
                       <button
                         key={key}
                         onClick={() => handleKeypadPress(key)}
-                        className={`py-3.5 rounded-xl border transition-all active:scale-90 flex items-center justify-center font-bold text-lg ${
+                        className={`py-3 rounded-xl border transition-all active:scale-90 flex items-center justify-center font-bold text-base ${
                           key === 'CLEAR'
                             ? 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30 text-xs font-sans'
                             : key === 'BACK'
                             ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 text-xs font-sans'
                             : isDark
                             ? 'bg-slate-950 border-slate-800 text-white hover:bg-slate-800'
-                            : 'bg-white border-slate-200 text-slate-900 hover:bg-slate-100 shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-900 hover:bg-slate-100'
                         }`}
                       >
                         {key === 'CLEAR' ? 'مسح' : key === 'BACK' ? '⌫ رجوع' : key}
@@ -967,9 +949,7 @@ export default function LuxuryStoreLedgerApp() {
                     placeholder="بيان العملية (مثال: طحين، معلبات، كاش...)"
                     value={posDetails}
                     onChange={(e) => setPosDetails(e.target.value)}
-                    className={`w-full rounded-xl px-3.5 py-2.5 text-xs outline-none border ${
-                      isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
-                    }`}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-emerald-500"
                   />
 
                   {/* Confirm Button */}
@@ -986,9 +966,7 @@ export default function LuxuryStoreLedgerApp() {
                   >
                     <CheckCircle2 className="w-5 h-5" />
                     <span>
-                      {isOverpaying
-                        ? `غير مسموح بسداد أكثر من الدين (${selectedCustomer.balance} ₪)`
-                        : 'تأكيد واستخراج كود QR المباشر'}
+                      {isOverpaying ? `غير مسموح بسداد أكثر من الدين` : 'تأكيد وحفظ العملية بقاعدة البيانات'}
                     </span>
                   </button>
                 </>
@@ -998,88 +976,83 @@ export default function LuxuryStoreLedgerApp() {
         </div>
       )}
 
-      {/* REAL SCANNABLE QR CODE MODAL WITH "DONE & CONFIRMED" IN-MODAL FEEDBACK */}
+      {/* Real QR Verification Modal with Thermal Print & WhatsApp Dispatch */}
       {qrModalData && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className={`w-full max-w-sm rounded-3xl p-6 flex flex-col items-center text-center gap-4 shadow-2xl relative animate-in fade-in zoom-in-95 border ${
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className={`w-full max-w-sm rounded-3xl p-5 flex flex-col items-center text-center gap-4 shadow-2xl border ${
             isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
           }`}>
-            <button
-              onClick={() => setQrModalData(null)}
-              className="absolute top-4 left-4 text-slate-400 hover:text-white p-1 rounded-lg bg-slate-800/40"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="w-full flex items-center justify-between border-b border-slate-800 pb-2">
+              <span className="text-xs font-bold text-slate-400">سند رقمي موثق</span>
+              <button onClick={() => setQrModalData(null)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
             {!qrDoneSuccess ? (
               <>
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-                  <QrCode className="w-6 h-6" />
-                </div>
-
-                <div>
-                  <h3 className={`text-base font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    {qrModalData.type === 'REPAYMENT' ? 'كود إيصال سداد الدفعة' : 'كود إيصال الشراء الآجل'}
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    امسح الرمز بكاميرا الجوال أو اضغط تأكيد فوري
-                  </p>
-                </div>
-
-                {/* The Real Canvas Scannable QR Code */}
                 <div className="border-2 border-slate-800 rounded-2xl p-2 bg-white shadow-xl">
-                  <RealQRCode value={qrModalData.url} size={210} />
+                  <RealQRCode value={qrModalData.url} size={190} />
                 </div>
 
-                {/* Transaction Brief */}
-                <div className={`w-full rounded-xl p-3 text-xs flex flex-col gap-1.5 text-right border ${
-                  isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
-                }`}>
+                <div className="w-full bg-slate-950 rounded-xl p-3 text-xs space-y-1 text-right border border-slate-800">
                   <div className="flex justify-between">
                     <span className="text-slate-400">المبلغ:</span>
-                    <span className="font-extrabold text-white text-sm">{qrModalData.amount} ₪ شيكل</span>
+                    <span className="font-extrabold text-white">{qrModalData.amount} {storeConfig.currency}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">الزبون:</span>
                     <span className="font-bold text-emerald-400">{qrModalData.customerName}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">رقم الإيصال:</span>
+                    <span className="text-slate-400">رقم السند:</span>
                     <span className="font-mono text-slate-400">{qrModalData.receiptId}</span>
                   </div>
                 </div>
 
-                {/* Instant "تم وخلاص" Confirmation Button */}
+                {/* Thermal Print & WhatsApp Dispatch Actions */}
+                <div className="grid grid-cols-2 gap-2 w-full">
+                  <button
+                    onClick={() => window.print()}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all border border-slate-700"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    طباعة إيصال حراري
+                  </button>
+
+                  <a
+                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                      `سند مالي من ${storeConfig.storeName}%0Aالزبون: ${qrModalData.customerName}%0Aالعملية: ${
+                        qrModalData.type === 'REPAYMENT' ? 'سداد دفعة' : 'تسجيل دين'
+                      }%0Aالمبلغ: ${qrModalData.amount} ${storeConfig.currency}%0Aالرصيد المتبقي: ${
+                        qrModalData.newBalance
+                      } ${storeConfig.currency}%0Aرقم السند: ${qrModalData.receiptId}%0Aرابط التحقق: ${qrModalData.url}`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-emerald-600/20"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    إرسال واتساب
+                  </a>
+                </div>
+
+                {/* Instant Done Button */}
                 <button
                   onClick={() => setQrDoneSuccess(true)}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 rounded-xl text-sm transition-all shadow-lg shadow-emerald-600/25 active:scale-95 flex items-center justify-center gap-2"
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 rounded-xl text-xs transition-all"
                 >
-                  <CheckCircle2 className="w-5 h-5" />
-                  <span>تأكيد: تم المسح والانتهاء ✓</span>
+                  تأكيد: تم المسح والانتهاء ✓
                 </button>
               </>
             ) : (
-              /* INSTANT SUCCESS SCREEN: "تم وخلاص" WITHOUT ANY REDIRECTS */
-              <div className="py-6 flex flex-col items-center gap-4 animate-in zoom-in-95">
-                <div className="w-20 h-20 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center justify-center animate-bounce">
-                  <CheckCircle2 className="w-12 h-12" />
-                </div>
-
-                <div>
-                  <h3 className="text-xl font-black text-emerald-400">تمت العملية بنجاح!</h3>
-                  <p className="text-xs text-slate-400 mt-1 max-w-xs">
-                    تم قيد المبلغ وتحديث رصيد {qrModalData.customerName} بالدفتر فوراً.
-                  </p>
-                </div>
-
-                <div className={`p-4 rounded-2xl w-full text-center border ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-                  <span className="text-xs text-slate-400 block mb-1">المبلغ المعتمد:</span>
-                  <span className="text-3xl font-black text-white">{qrModalData.amount} ₪</span>
-                </div>
-
+              <div className="py-6 flex flex-col items-center gap-3">
+                <CheckCircle2 className="w-14 h-14 text-emerald-400 animate-bounce" />
+                <h3 className="text-lg font-black text-white">تمت العملية بنجاح!</h3>
+                <p className="text-xs text-slate-400">تم حفظ وتحديث رصيد الزبون في قاعدة البيانات المحلية.</p>
                 <button
                   onClick={() => setQrModalData(null)}
-                  className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl text-sm transition-all shadow-sm"
+                  className="w-full mt-2 bg-emerald-600 text-white font-bold py-2.5 rounded-xl text-xs"
                 >
                   إغلاق والعودة للدفتر
                 </button>
@@ -1089,53 +1062,51 @@ export default function LuxuryStoreLedgerApp() {
         </div>
       )}
 
-      {/* MODAL: Add New Customer (WITH INITIAL DEBT SUPPORT!) */}
+      {/* Modal: Add New Customer */}
       {showNewCustomerModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className={`w-full max-w-sm rounded-3xl p-6 flex flex-col gap-4 shadow-2xl border ${
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className={`w-full max-w-sm rounded-3xl p-5 flex flex-col gap-4 shadow-2xl border ${
             isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
           }`}>
-            <div className="flex items-center justify-between">
-              <h3 className={`text-base font-black flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                <UserPlus className="w-5 h-5 text-emerald-500" />
-                إضافة زبون مديون جديد
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <h3 className="text-sm font-black flex items-center gap-2 text-white">
+                <UserPlus className="w-4 h-4 text-emerald-500" />
+                إضافة زبون جديد للدفتر
               </h3>
               <button onClick={() => setShowNewCustomerModal(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateCustomer} className="flex flex-col gap-3">
+            <form onSubmit={handleCreateCustomer} className="flex flex-col gap-3 text-xs">
               <div>
-                <label className="text-xs font-bold text-slate-400 mb-1 block">اسم الزبون الكامل</label>
+                <label className="text-slate-400 mb-1 block font-bold">اسم الزبون الكامل</label>
                 <input
                   type="text"
                   required
                   placeholder="مثال: يوسف محمود الدحدوح"
                   value={newCustName}
                   onChange={(e) => setNewCustName(e.target.value)}
-                  className={`w-full rounded-xl px-3.5 py-2.5 text-sm outline-none border ${
-                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
-                  }`}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white outline-none focus:border-emerald-500"
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-slate-400">رقم الجوال (جوال 059 / أوريدو 056)</label>
+                  <label className="text-slate-400 font-bold">رقم الجوال (جوال 059 / أوريدو 056)</label>
                   {(() => {
                     if (!newCustPhone) return null;
                     const check = validatePalestinianPhone(newCustPhone);
                     if (check.isValid) {
                       return (
-                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-500/20">
+                        <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-500/20">
                           <Check className="w-3 h-3" />
                           {check.network}
                         </span>
                       );
                     }
                     return (
-                      <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
+                      <span className="text-[9px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
                         رقم غير مكتمل
                       </span>
                     );
@@ -1147,86 +1118,40 @@ export default function LuxuryStoreLedgerApp() {
                   placeholder="مثال: 0599123456 أو 0568123456"
                   value={newCustPhone}
                   onChange={(e) => setNewCustPhone(e.target.value)}
-                  className={`w-full rounded-xl px-3.5 py-2.5 text-sm outline-none font-mono border transition-all ${
+                  className={`w-full rounded-xl px-3 py-2 text-xs outline-none font-mono border transition-all ${
                     newCustPhone.length > 0 && !validatePalestinianPhone(newCustPhone).isValid
-                      ? 'border-red-500/60 bg-red-500/5 focus:border-red-500 text-red-200'
-                      : isDark
-                      ? 'bg-slate-950 border-slate-800 text-white focus:border-emerald-500'
-                      : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-emerald-500'
-                  }`}
-                />
-                {(() => {
-                  if (!newCustPhone) return null;
-                  const check = validatePalestinianPhone(newCustPhone);
-                  if (!check.isValid) {
-                    return (
-                      <p className="text-[11px] text-red-400 mt-1 flex items-center gap-1">
-                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                        {check.error}
-                      </p>
-                    );
-                  }
-                  const duplicate = customers.find((c) => c.phone === check.normalized);
-                  if (duplicate) {
-                    return (
-                      <p className="text-[11px] text-amber-400 mt-1 flex items-center gap-1">
-                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                        هذا الرقم مسجل مسبقاً باسم: {duplicate.name}
-                      </p>
-                    );
-                  }
-                  return null;
-                })()}
-              </div>
-
-              {/* Initial Debt Field */}
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 flex flex-col gap-2">
-                <div>
-                  <label className="text-xs font-extrabold text-amber-500 mb-1 block">
-                    الدين الحالي المطلوب منه (بالشيكل ₪):
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    step="0.5"
-                    placeholder="مثال: 120"
-                    value={newCustInitialDebt}
-                    onChange={(e) => setNewCustInitialDebt(e.target.value)}
-                    className={`w-full rounded-xl px-3.5 py-2 text-sm outline-none font-mono font-bold border ${
-                      isDark ? 'bg-slate-950 border-amber-500/40 text-amber-400' : 'bg-white border-amber-300 text-amber-600'
-                    }`}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] text-slate-400 mb-1 block">سبب الدين / البيان:</label>
-                  <input
-                    type="text"
-                    placeholder="مثال: طحين، معلبات، حساب قديم..."
-                    value={newCustDebtReason}
-                    onChange={(e) => setNewCustDebtReason(e.target.value)}
-                    className={`w-full rounded-xl px-3 py-1.5 text-xs outline-none border ${
-                      isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
-                    }`}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-400 mb-1 block">سقف الدين الأقصى المسموح (₪)</label>
-                <input
-                  type="number"
-                  placeholder="مثال: 500"
-                  value={newCustCeiling}
-                  onChange={(e) => setNewCustCeiling(e.target.value)}
-                  className={`w-full rounded-xl px-3.5 py-2 text-sm outline-none font-mono border ${
-                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                      ? 'border-red-500/60 bg-red-500/5 text-red-200'
+                      : 'bg-slate-950 border-slate-800 text-white focus:border-emerald-500'
                   }`}
                 />
               </div>
 
-              <div className="flex gap-2.5 mt-2">
+              {/* Initial Debt */}
+              <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                <span className="text-[11px] font-bold text-amber-400 block">رصيد دين افتتاحي (اختياري)</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-0.5">المبلغ ({storeConfig.currency})</label>
+                    <input
+                      type="number"
+                      value={newCustInitialDebt}
+                      onChange={(e) => setNewCustInitialDebt(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-0.5">سقف الدين المسموح</label>
+                    <input
+                      type="number"
+                      value={newCustCeiling}
+                      onChange={(e) => setNewCustCeiling(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-2">
                 <button
                   type="submit"
                   disabled={
@@ -1242,105 +1167,17 @@ export default function LuxuryStoreLedgerApp() {
                       : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20 active:scale-95'
                   }`}
                 >
-                  حفظ وتسجيل الزبون بالدفتر
+                  حفظ وتسجيل الزبون
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowNewCustomerModal(false)}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold ${isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-4 py-2.5 rounded-xl text-xs"
                 >
                   إلغاء
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: Store Settings Customization */}
-      {showStoreSettingsModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className={`w-full max-w-sm rounded-3xl p-6 flex flex-col gap-4 shadow-2xl border ${
-            isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-          }`}>
-            <div className="flex items-center justify-between">
-              <h3 className={`text-base font-black flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                <Store className="w-5 h-5 text-emerald-500" />
-                تخصيص بيانات المحل
-              </h3>
-              <button onClick={() => setShowStoreSettingsModal(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="text-xs font-bold text-slate-400 mb-1 block">اسم المحل / البقالة</label>
-                <input
-                  type="text"
-                  value={storeName}
-                  onChange={(e) => setStoreName(e.target.value)}
-                  className={`w-full rounded-xl px-3.5 py-2.5 text-sm outline-none border ${
-                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
-                  }`}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-400 mb-1 block">اسم صاحب المحل / المسؤول</label>
-                <input
-                  type="text"
-                  value={storeOwner}
-                  onChange={(e) => setStoreOwner(e.target.value)}
-                  className={`w-full rounded-xl px-3.5 py-2.5 text-sm outline-none border ${
-                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
-                  }`}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-400 mb-1 block">الموقع / العنوان في غزة</label>
-                <input
-                  type="text"
-                  value={storeLocation}
-                  onChange={(e) => setStoreLocation(e.target.value)}
-                  className={`w-full rounded-xl px-3.5 py-2.5 text-sm outline-none border ${
-                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
-                  }`}
-                />
-              </div>
-
-              <button
-                onClick={() => {
-                  try {
-                    localStorage.setItem(
-                      'daftar_gaza_store',
-                      JSON.stringify({ storeName, storeOwner, storeLocation })
-                    );
-                  } catch {}
-                  setShowStoreSettingsModal(false);
-                  triggerToast('تم تحديث وحفظ بيانات المحل بنجاح! 🏬');
-                }}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-2.5 rounded-xl text-xs transition-all shadow-md shadow-emerald-600/20 mt-2"
-              >
-                حفظ التعديلات
-              </button>
-
-              <div className="pt-3 border-t border-red-500/20 mt-1">
-                <span className="text-[11px] font-bold text-red-400 block mb-1.5">إدارة السجلات وتصفير الدفتر:</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowStoreSettingsModal(false);
-                    handleResetAllData();
-                  }}
-                  className="w-full bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/30 font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>تصفير ومسح كافة الزبائن والديون (البدء بسجل جديد)</span>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
