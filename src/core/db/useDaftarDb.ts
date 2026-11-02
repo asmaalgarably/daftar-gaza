@@ -44,7 +44,6 @@ export function useDaftarDb() {
 
     init();
 
-    // Subscribe to any changes
     const unsubscribe = daftarDb.subscribe(() => {
       if (mounted) refresh();
     });
@@ -97,8 +96,8 @@ export function useDaftarDb() {
     return await daftarDb.importBackup(jsonString);
   }, []);
 
-  const resetFactory = useCallback(async () => {
-    return await daftarDb.resetFactory();
+  const clearAllLedgerData = useCallback(async () => {
+    return await daftarDb.clearAllLedgerData();
   }, []);
 
   return {
@@ -114,6 +113,6 @@ export function useDaftarDb() {
     updateStoreConfig,
     exportBackup,
     importBackup,
-    resetFactory,
+    clearAllLedgerData,
   };
 }

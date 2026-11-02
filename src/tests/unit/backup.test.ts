@@ -9,8 +9,6 @@ describe('Production Backup & Data Integrity Verification', () => {
     phone: '0599123456',
     location: 'غزة - دير البلح',
     currency: '₪',
-    pinCode: '1234',
-    isPinLocked: true,
     receiptFooter: 'سند مالي معتمد',
   };
 

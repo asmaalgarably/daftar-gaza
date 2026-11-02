@@ -11,92 +11,8 @@ export const DEFAULT_STORE_CONFIG: StoreConfig = {
   phone: '0599123456',
   location: 'غزة - دير البلح (شارع النخيل)',
   currency: '₪',
-  pinCode: '0000',
-  isPinLocked: false,
   receiptFooter: 'شكراً لثقتكم - سجل مالي معتمد وغير قابل للتعديل',
 };
-
-// Initial seed customers for a fresh store setup
-export const INITIAL_SEED_CUSTOMERS: Customer[] = [
-  {
-    id: 'cust-1',
-    name: 'أحمد خليل الرنتيسي',
-    phone: '0599123456',
-    balance: 145,
-    debtCeiling: 500,
-    notes: 'زبون دائم - سداد شهري',
-    createdAt: Date.now() - 86400000 * 3,
-    updatedAt: Date.now() - 3600000 * 2,
-  },
-  {
-    id: 'cust-2',
-    name: 'محمد يوسف النجار',
-    phone: '0568987654',
-    balance: 35,
-    debtCeiling: 300,
-    notes: 'حي البركة',
-    createdAt: Date.now() - 86400000 * 5,
-    updatedAt: Date.now() - 3600000 * 5,
-  },
-  {
-    id: 'cust-3',
-    name: 'خالد عبد الرحمن (الجار)',
-    phone: '0597112233',
-    balance: 420,
-    debtCeiling: 400,
-    notes: 'متأخر أسبوعين - تم الاتصال',
-    createdAt: Date.now() - 86400000 * 12,
-    updatedAt: Date.now() - 86400000 * 1,
-  },
-];
-
-export const INITIAL_SEED_TRANSACTIONS: Transaction[] = [
-  {
-    id: 'TX-101',
-    customerId: 'cust-1',
-    customerName: 'أحمد خليل الرنتيسي',
-    customerPhone: '0599123456',
-    amount: 145,
-    type: 'DEBT',
-    details: 'شراء مواد تموينية، طحين وسكر',
-    timestamp: Date.now() - 3600000 * 2,
-    previousBalance: 0,
-    newBalance: 145,
-    previousHash: 'GENESIS_BLOCK_0000000000000000',
-    hash: '0x8f4c1e2a89c47e8b912a',
-    status: 'CONFIRMED',
-  },
-  {
-    id: 'TX-102',
-    customerId: 'cust-2',
-    customerName: 'محمد يوسف النجار',
-    customerPhone: '0568987654',
-    amount: 35,
-    type: 'DEBT',
-    details: 'شراء زيت نباتي وبيض',
-    timestamp: Date.now() - 3600000 * 5,
-    previousBalance: 0,
-    newBalance: 35,
-    previousHash: '0x8f4c1e2a89c47e8b912a',
-    hash: '0x3a9d5e1b72c91a4f890c',
-    status: 'CONFIRMED',
-  },
-  {
-    id: 'TX-103',
-    customerId: 'cust-3',
-    customerName: 'خالد عبد الرحمن (الجار)',
-    customerPhone: '0597112233',
-    amount: 420,
-    type: 'DEBT',
-    details: 'شراء كرتونة تونة وجبنة معلبة',
-    timestamp: Date.now() - 86400000 * 1,
-    previousBalance: 0,
-    newBalance: 420,
-    previousHash: '0x3a9d5e1b72c91a4f890c',
-    hash: '0x7e1a9c3d4f8b2e5a610d',
-    status: 'CONFIRMED',
-  },
-];
 
 class DaftarDatabase {
   private db: IDBDatabase | null = null;
@@ -157,7 +73,7 @@ class DaftarDatabase {
 
       request.onsuccess = async (event) => {
         this.db = (event.target as IDBOpenDBRequest).result;
-        await this.seedInitialDataIfEmpty(this.db);
+        await this.seedInitialStoreConfigIfEmpty(this.db);
         resolve(this.db);
       };
 
@@ -169,24 +85,21 @@ class DaftarDatabase {
     return this.isInitializing;
   }
 
-  private async seedInitialDataIfEmpty(db: IDBDatabase): Promise<void> {
+  // Ensures store config exists without seeding any fake customers
+  private async seedInitialStoreConfigIfEmpty(db: IDBDatabase): Promise<void> {
     return new Promise((resolve) => {
-      const tx = db.transaction(['storeConfig', 'customers', 'transactions'], 'readwrite');
+      const tx = db.transaction('storeConfig', 'readwrite');
       const storeConfigStore = tx.objectStore('storeConfig');
       const configReq = storeConfigStore.get('CURRENT_STORE');
 
       configReq.onsuccess = () => {
         if (!configReq.result) {
           storeConfigStore.put(DEFAULT_STORE_CONFIG);
-          const custStore = tx.objectStore('customers');
-          INITIAL_SEED_CUSTOMERS.forEach((c) => custStore.put(c));
-          const txStore = tx.objectStore('transactions');
-          INITIAL_SEED_TRANSACTIONS.forEach((t) => txStore.put(t));
         }
       };
 
       tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve(); // Non-blocking
+      tx.onerror = () => resolve();
     });
   }
 
@@ -307,14 +220,12 @@ class DaftarDatabase {
   /**
    * Atomically records a transaction and updates the customer's balance.
    */
-  public async recordTransaction(
-    params: {
-      customerId: string;
-      amount: number;
-      type: 'DEBT' | 'REPAYMENT';
-      details: string;
-    }
-  ): Promise<Transaction> {
+  public async recordTransaction(params: {
+    customerId: string;
+    amount: number;
+    type: 'DEBT' | 'REPAYMENT';
+    details: string;
+  }): Promise<Transaction> {
     const db = await this.getDb();
     const customer = await this.getCustomerById(params.customerId);
     if (!customer) {
@@ -340,7 +251,7 @@ class DaftarDatabase {
     const lastTx = allTx[0];
     const previousHash = lastTx ? lastTx.hash : 'GENESIS_BLOCK_0000000000000000';
 
-    // Simple robust hash calculation for audit trail
+    // Simple deterministic hash
     const payload = `${params.customerId}:${params.amount}:${params.type}:${Date.now()}:${previousHash}`;
     let hashNum = 0;
     for (let i = 0; i < payload.length; i++) {
@@ -365,7 +276,6 @@ class DaftarDatabase {
       status: 'CONFIRMED',
     };
 
-    // Update customer in same transaction
     customer.balance = newBalance;
     customer.updatedAt = Date.now();
 
@@ -409,21 +319,17 @@ class DaftarDatabase {
       const db = await this.getDb();
       return new Promise((resolve, reject) => {
         const tx = db.transaction(['storeConfig', 'customers', 'transactions'], 'readwrite');
-        
-        // Clear old data
+
         tx.objectStore('customers').clear();
         tx.objectStore('transactions').clear();
 
-        // Restore config
         if (data.storeConfig) {
           tx.objectStore('storeConfig').put(data.storeConfig);
         }
 
-        // Restore customers
         const custStore = tx.objectStore('customers');
         data.customers.forEach((c) => custStore.put(c));
 
-        // Restore transactions
         const txStore = tx.objectStore('transactions');
         if (Array.isArray(data.transactions)) {
           data.transactions.forEach((t) => txStore.put(t));
@@ -441,18 +347,13 @@ class DaftarDatabase {
     }
   }
 
-  // Reset entire database to factory settings
-  public async resetFactory(): Promise<void> {
+  // COMPLETE ZERO-OUT: Wipes all customers and all transactions instantly!
+  public async clearAllLedgerData(): Promise<void> {
     const db = await this.getDb();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(['storeConfig', 'customers', 'transactions'], 'readwrite');
-      tx.objectStore('storeConfig').clear();
+      const tx = db.transaction(['customers', 'transactions'], 'readwrite');
       tx.objectStore('customers').clear();
       tx.objectStore('transactions').clear();
-
-      tx.objectStore('storeConfig').put(DEFAULT_STORE_CONFIG);
-      INITIAL_SEED_CUSTOMERS.forEach((c) => tx.objectStore('customers').put(c));
-      INITIAL_SEED_TRANSACTIONS.forEach((t) => tx.objectStore('transactions').put(t));
 
       tx.oncomplete = () => {
         this.notify();

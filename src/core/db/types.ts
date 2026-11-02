@@ -32,8 +32,6 @@ export interface StoreConfig {
   phone: string;
   location: string;
   currency: string;
-  pinCode: string; // 4-digit PIN e.g. '1234'
-  isPinLocked: boolean;
   receiptFooter: string;
 }
 

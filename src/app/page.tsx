@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Store,
   Users,
-  CreditCard,
   PlusCircle,
   QrCode,
   Search,
@@ -20,7 +19,6 @@ import {
   ArrowDownLeft,
   Calendar,
   Wallet,
-  TrendingUp,
   AlertCircle,
   Printer,
   Sun,
@@ -30,11 +28,9 @@ import {
   BookOpen,
   Trash2,
   Camera,
-  ShieldCheck,
-  Download,
-  Upload,
-  Lock,
   MessageCircle,
+  RotateCcw,
+  Sparkles,
 } from 'lucide-react';
 import { DaftarLogo } from '@/components/DaftarLogo';
 import { RealQRCode } from '@/components/RealQRCode';
@@ -44,6 +40,7 @@ import { ThermalReceipt } from '@/components/ThermalReceipt';
 import { CameraQRScanner } from '@/components/CameraQRScanner';
 import { StoreSettingsModal } from '@/components/StoreSettingsModal';
 import { BarcodeViewModal } from '@/components/BarcodeView';
+import { playCashierChime } from '@/core/sound/cashierSound';
 import { Transaction } from '@/core/db/types';
 
 export default function LuxuryStoreLedgerApp() {
@@ -61,7 +58,7 @@ export default function LuxuryStoreLedgerApp() {
     updateStoreConfig,
     exportBackup,
     importBackup,
-    resetFactory,
+    clearAllLedgerData,
   } = useDaftarDb();
 
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -86,7 +83,7 @@ export default function LuxuryStoreLedgerApp() {
   // Add Customer Form State
   const [newCustName, setNewCustName] = useState('');
   const [newCustPhone, setNewCustPhone] = useState('');
-  const [newCustInitialDebt, setNewCustInitialDebt] = useState('50');
+  const [newCustInitialDebt, setNewCustInitialDebt] = useState('0');
   const [newCustDebtReason, setNewCustDebtReason] = useState('رصيد دين سابق / مشتريات');
   const [newCustCeiling, setNewCustCeiling] = useState('500');
 
@@ -122,6 +119,8 @@ export default function LuxuryStoreLedgerApp() {
   useEffect(() => {
     if (customers.length > 0 && !selectedCustomerId) {
       setSelectedCustomerId(customers[0].id);
+    } else if (customers.length === 0) {
+      setSelectedCustomerId(null);
     }
   }, [customers, selectedCustomerId]);
 
@@ -231,6 +230,11 @@ export default function LuxuryStoreLedgerApp() {
         details: txDetails,
       });
 
+      // PLAY CASHIER CHIME ONLY ON DEBT REPAYMENT!
+      if (posMode === 'REPAYMENT') {
+        playCashierChime();
+      }
+
       setActivePrintTx(recordedTx);
 
       const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
@@ -260,7 +264,7 @@ export default function LuxuryStoreLedgerApp() {
 
       triggerToast(
         currentMode === 'REPAYMENT'
-          ? `تم حفظ سداد ${amountNum} ${storeConfig.currency} لحساب ${selectedCustomer.name}`
+          ? `تم قيد سداد ${amountNum} ${storeConfig.currency} بنجاح 🔔`
           : `تم قيد دين بقيمة ${amountNum} ${storeConfig.currency} على ${selectedCustomer.name}`
       );
     } catch (err: unknown) {
@@ -303,10 +307,9 @@ export default function LuxuryStoreLedgerApp() {
         phone: validatedPhone,
         balance: 0,
         debtCeiling: parseFloat(newCustCeiling) || 500,
-        notes: 'زبون مسجل حديثاً',
+        notes: 'زبون جديد',
       });
 
-      // If there was an initial debt, record it in the ledger
       if (initialDebtNum > 0) {
         await recordTransaction({
           customerId: newCust.id,
@@ -320,13 +323,13 @@ export default function LuxuryStoreLedgerApp() {
       setShowNewCustomerModal(false);
       setNewCustName('');
       setNewCustPhone('');
-      setNewCustInitialDebt('50');
+      setNewCustInitialDebt('0');
       setNewCustDebtReason('رصيد دين سابق / مشتريات');
 
       triggerToast(
         initialDebtNum > 0
           ? `تمت إضافة ${trimmedName} برصيد دين ${initialDebtNum} ${storeConfig.currency}`
-          : `تمت إضافة الزبون ${trimmedName} إلى الدفتر بنجاح`
+          : `تمت إضافة الزبون ${trimmedName} إلى الدفتر بنجاح ✓`
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'فشل إضافة الزبون';
@@ -346,7 +349,19 @@ export default function LuxuryStoreLedgerApp() {
         const remaining = customers.filter((c) => c.id !== customerId);
         setSelectedCustomerId(remaining.length > 0 ? remaining[0].id : null);
       }
-      triggerToast(`تم حذف حساب الزبون (${customerName}) نهائياً`);
+      triggerToast(`تم حذف حساب الزبون (${customerName})`);
+    }
+  };
+
+  // Master ZERO-OUT: Wipes all customers and transactions completely
+  const handleDirectZeroOut = async () => {
+    if (
+      typeof window !== 'undefined' &&
+      window.confirm('هل أنت متأكد من تصفير الدفتر بالكامل ومسح كافة الزبائن والديون (0 زبائن)؟')
+    ) {
+      await clearAllLedgerData();
+      setSelectedCustomerId(null);
+      triggerToast('تم تصفير الدفتر بالكامل، السجل فارغ الآن (0 زبائن) ✓');
     }
   };
 
@@ -356,7 +371,7 @@ export default function LuxuryStoreLedgerApp() {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 text-white">
         <DaftarLogo size={48} showText={true} />
-        <p className="text-xs text-slate-400 mt-4 animate-pulse">جاري تحميل دفتر المحل وقاعدة البيانات المحلية...</p>
+        <p className="text-xs text-slate-400 mt-4 animate-pulse">جاري تحميل دفتر المحل وقاعدة البيانات...</p>
       </div>
     );
   }
@@ -367,7 +382,7 @@ export default function LuxuryStoreLedgerApp() {
         isDark ? 'bg-theme-luxury text-slate-100' : 'bg-theme-day text-slate-800'
       }`}
     >
-      {/* Thermal Receipt Hidden Component (Revealed during window.print()) */}
+      {/* Thermal Receipt Hidden Component */}
       <ThermalReceipt transaction={activePrintTx} storeConfig={storeConfig} />
 
       {/* Camera QR Scanner Modal */}
@@ -385,7 +400,7 @@ export default function LuxuryStoreLedgerApp() {
         }}
       />
 
-      {/* Store Settings & Backup Modal */}
+      {/* Store Settings & Backup Modal (No PIN!) */}
       <StoreSettingsModal
         isOpen={showStoreSettingsModal}
         onClose={() => setShowStoreSettingsModal(false)}
@@ -393,7 +408,7 @@ export default function LuxuryStoreLedgerApp() {
         onSaveConfig={updateStoreConfig}
         onExportBackup={exportBackup}
         onImportBackup={importBackup}
-        onResetFactory={resetFactory}
+        onClearAllData={clearAllLedgerData}
         triggerToast={triggerToast}
       />
 
@@ -453,19 +468,19 @@ export default function LuxuryStoreLedgerApp() {
         </div>
       )}
 
-      {/* Top Header - Spacious & Clean */}
+      {/* Top Header - Executive Fintech Style */}
       <header
-        className={`border-b sticky top-0 z-30 px-4 lg:px-8 py-3 backdrop-blur-md transition-colors ${
-          isDark ? 'bg-slate-950/85 border-slate-800/80' : 'bg-white/95 border-slate-200 shadow-xs'
+        className={`border-b sticky top-0 z-30 px-4 lg:px-8 py-3.5 backdrop-blur-md transition-colors ${
+          isDark ? 'bg-slate-950/85 border-slate-800/80 shadow-sm' : 'bg-white/95 border-slate-200/80 shadow-xs'
         }`}
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           {/* Logo & Store Profile */}
           <div className="flex items-center gap-3">
-            <DaftarLogo size={36} showText={true} />
-            <div className={`h-5 w-px hidden sm:block ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+            <DaftarLogo size={38} showText={true} />
+            <div className={`h-6 w-px hidden sm:block ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
             <div className="hidden sm:flex flex-col">
-              <span className={`text-xs font-bold flex items-center gap-1.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              <span className={`text-xs font-black flex items-center gap-1.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
                 <Store className="w-3.5 h-3.5 text-emerald-500" />
                 {storeConfig.storeName}
               </span>
@@ -475,12 +490,12 @@ export default function LuxuryStoreLedgerApp() {
             </div>
           </div>
 
-          {/* Clean Controls & Action Buttons */}
+          {/* Controls & Action Buttons */}
           <div className="flex items-center gap-2">
             {/* Camera QR Scanner */}
             <button
               onClick={() => setShowCameraScanner(true)}
-              className="flex items-center gap-1.5 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95"
+              className="flex items-center gap-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3.5 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm"
               title="مسح رمز السند المطبوع بكاميرا الهاتف"
             >
               <Camera className="w-3.5 h-3.5" />
@@ -490,18 +505,17 @@ export default function LuxuryStoreLedgerApp() {
             {/* Theme Switcher */}
             <button
               onClick={() => setThemeMode(isDark ? 'DAY' : 'LUXURY')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+              className={`p-2 rounded-xl border transition-all ${
                 isDark
                   ? 'bg-slate-900 border-slate-800 text-amber-400 hover:bg-slate-800'
                   : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
               }`}
               title="تغيير الثيم (ليلي / نهاري)"
             >
-              {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-indigo-600" />}
-              <span className="hidden sm:inline">{isDark ? 'نهاري' : 'ليلي'}</span>
+              {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
             </button>
 
-            {/* Store Settings & Backup Button */}
+            {/* Store Settings Button */}
             <button
               onClick={() => setShowStoreSettingsModal(true)}
               className={`p-2 rounded-xl border transition-all ${
@@ -509,7 +523,7 @@ export default function LuxuryStoreLedgerApp() {
                   ? 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white'
                   : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
               }`}
-              title="تخصيص بيانات المحل والنسخ الاحتياطي"
+              title="إعدادات المحل والبيانات"
             >
               <Settings className="w-4 h-4" />
             </button>
@@ -517,52 +531,52 @@ export default function LuxuryStoreLedgerApp() {
         </div>
       </header>
 
-      {/* Focused Store Metrics Overview */}
+      {/* Metrics Banner */}
       <section className="max-w-7xl mx-auto w-full px-4 lg:px-8 pt-5">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           {/* Card 1: Outstanding Debt */}
-          <div className={`p-4 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
+          <div className={`p-4.5 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
             <div className="flex justify-between items-start">
               <span className="text-xs font-bold text-slate-400">إجمالي ديون المحل</span>
               <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
                 <Wallet className="w-4 h-4" />
               </div>
             </div>
-            <div className="my-1.5">
-              <span className="text-2xl lg:text-3xl font-black text-amber-500 font-mono">{totalOutstandingBalance}</span>
+            <div className="my-2">
+              <span className="text-3xl font-black text-amber-500 font-mono tracking-tight">{totalOutstandingBalance}</span>
               <span className="text-xs font-bold text-slate-400 mr-1.5">{storeConfig.currency}</span>
             </div>
-            <p className="text-[11px] text-slate-400">في ذمة {activeDebtorsCount} زبائن حتى اللحظة</p>
+            <p className="text-[11px] text-slate-400">في ذمة {activeDebtorsCount} زبائن حتى الآن</p>
           </div>
 
           {/* Card 2: Debtors Count */}
-          <div className={`p-4 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
+          <div className={`p-4.5 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
             <div className="flex justify-between items-start">
               <span className="text-xs font-bold text-slate-400">زبائن عليهم ديون حالية</span>
               <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
                 <Users className="w-4 h-4" />
               </div>
             </div>
-            <div className="my-1.5">
-              <span className="text-2xl lg:text-3xl font-black text-emerald-400 font-mono">{activeDebtorsCount}</span>
+            <div className="my-2">
+              <span className="text-3xl font-black text-emerald-400 font-mono tracking-tight">{activeDebtorsCount}</span>
               <span className="text-xs font-bold text-slate-400 mr-1.5">زبون</span>
             </div>
-            <p className="text-[11px] text-slate-400">من إجمالي {customers.length} مسجلين بالدفتر</p>
+            <p className="text-[11px] text-slate-400">من إجمالي {customers.length} زبون بالدفتر</p>
           </div>
 
           {/* Card 3: Overdue Alert Count */}
-          <div className={`p-4 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
+          <div className={`p-4.5 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
             <div className="flex justify-between items-start">
-              <span className="text-xs font-bold text-slate-400">ديون متجاوزة للسقف</span>
-              <div className="w-8 h-8 rounded-xl bg-red-500/10 text-red-400 flex items-center justify-center">
+              <span className="text-xs font-bold text-slate-400">تجاوز سقف الدين</span>
+              <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center">
                 <AlertCircle className="w-4 h-4" />
               </div>
             </div>
-            <div className="my-1.5">
-              <span className="text-2xl lg:text-3xl font-black text-red-400 font-mono">{overdueCount}</span>
+            <div className="my-2">
+              <span className="text-3xl font-black text-rose-400 font-mono tracking-tight">{overdueCount}</span>
               <span className="text-xs font-bold text-slate-400 mr-1.5">حالات</span>
             </div>
-            <p className="text-[11px] text-red-400/90 font-medium">تجاوزت سقف الدين المحدد</p>
+            <p className="text-[11px] text-rose-400/90 font-medium">تجاوزت الحد الائتماني المسموح</p>
           </div>
         </div>
       </section>
@@ -580,9 +594,19 @@ export default function LuxuryStoreLedgerApp() {
                 دفتر الزبائن ({customers.length})
               </span>
               <div className="flex items-center gap-1.5">
+                {/* DIRECT ZERO OUT BUTTON (1-Click Wipe) */}
+                {customers.length > 0 && (
+                  <button
+                    onClick={handleDirectZeroOut}
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/30 transition-all text-xs"
+                    title="تصفير الدفتر وحذف جميع الزبائن (0)"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 <button
                   onClick={() => setShowNewCustomerModal(true)}
-                  className="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md shadow-emerald-600/20 transition-all"
+                  className="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
                   زبون جديد
@@ -610,7 +634,7 @@ export default function LuxuryStoreLedgerApp() {
             <div className={`grid grid-cols-4 gap-1 p-1 rounded-xl text-[10px] font-bold ${isDark ? 'bg-slate-950/80' : 'bg-slate-100'}`}>
               <button
                 onClick={() => setCustomerFilter('ALL')}
-                className={`py-1 rounded-lg transition-all ${
+                className={`py-1.5 rounded-lg transition-all ${
                   customerFilter === 'ALL'
                     ? isDark
                       ? 'bg-slate-800 text-white'
@@ -622,7 +646,7 @@ export default function LuxuryStoreLedgerApp() {
               </button>
               <button
                 onClick={() => setCustomerFilter('DEBTORS')}
-                className={`py-1 rounded-lg transition-all ${
+                className={`py-1.5 rounded-lg transition-all ${
                   customerFilter === 'DEBTORS' ? 'bg-amber-500 text-slate-950 font-black' : 'text-slate-400'
                 }`}
               >
@@ -630,15 +654,15 @@ export default function LuxuryStoreLedgerApp() {
               </button>
               <button
                 onClick={() => setCustomerFilter('OVERDUE')}
-                className={`py-1 rounded-lg transition-all ${
-                  customerFilter === 'OVERDUE' ? 'bg-red-500 text-white font-black' : 'text-slate-400'
+                className={`py-1.5 rounded-lg transition-all ${
+                  customerFilter === 'OVERDUE' ? 'bg-rose-500 text-white font-black' : 'text-slate-400'
                 }`}
               >
                 تجاوز ({overdueCount})
               </button>
               <button
                 onClick={() => setCustomerFilter('CLEARED')}
-                className={`py-1 rounded-lg transition-all ${
+                className={`py-1.5 rounded-lg transition-all ${
                   customerFilter === 'CLEARED' ? 'bg-emerald-500 text-slate-950 font-black' : 'text-slate-400'
                 }`}
               >
@@ -650,19 +674,19 @@ export default function LuxuryStoreLedgerApp() {
           {/* Customers Scrollable List */}
           <div className="flex flex-col gap-2 overflow-y-auto max-h-[calc(100vh-270px)] pr-0.5">
             {customers.length === 0 ? (
-              <div className={`p-8 rounded-3xl border text-center flex flex-col items-center gap-3 ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+              <div className={`p-8 rounded-3xl border text-center flex flex-col items-center gap-3.5 ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
                   <BookOpen className="w-6 h-6" />
                 </div>
                 <div>
-                  <h4 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-800'}`}>الدفتر فارغ تماماً</h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5">اضغط على «زبون جديد» لتسجيل أول حساب في محلك.</p>
+                  <h4 className={`text-sm font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>الدفتر فارغ تماماً (0 زبائن)</h4>
+                  <p className="text-xs text-slate-400 mt-1">اضغط على «زبون جديد» للبدء بتسجيل حسابات محلك.</p>
                 </div>
                 <button
                   onClick={() => setShowNewCustomerModal(true)}
-                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1 shadow-md transition-all mt-1"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-black px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all mt-1"
                 >
-                  <PlusCircle className="w-3.5 h-3.5" />
+                  <PlusCircle className="w-4 h-4" />
                   إضافة أول زبون
                 </button>
               </div>
@@ -672,7 +696,6 @@ export default function LuxuryStoreLedgerApp() {
                 const isCleared = cust.balance === 0;
                 const isOverdue = cust.balance > cust.debtCeiling;
 
-                // Quick WhatsApp Link
                 const quickWhatsAppLink = getWhatsAppUrl(
                   cust.phone,
                   `السلام عليكم ${cust.name}، تحياتنا من ${storeConfig.storeName}.\nرصيدكم الحالي: ${cust.balance} ${storeConfig.currency}.`
@@ -699,7 +722,7 @@ export default function LuxuryStoreLedgerApp() {
                           isCleared
                             ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                             : isOverdue
-                            ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                            ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
                             : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                         }`}
                       >
@@ -712,7 +735,7 @@ export default function LuxuryStoreLedgerApp() {
                             {cust.name}
                           </span>
                           {isOverdue && (
-                            <span className="text-[9px] bg-red-500/15 text-red-400 border border-red-500/30 px-1.5 py-0.2 rounded font-bold">
+                            <span className="text-[9px] bg-rose-500/15 text-rose-400 border border-rose-500/30 px-1.5 py-0.2 rounded font-bold">
                               متجاوز السقف
                             </span>
                           )}
@@ -725,7 +748,7 @@ export default function LuxuryStoreLedgerApp() {
                       <div className="flex flex-col items-end">
                         <span
                           className={`text-sm font-black font-mono ${
-                            isCleared ? 'text-emerald-400' : isOverdue ? 'text-red-400' : 'text-amber-400'
+                            isCleared ? 'text-emerald-400' : isOverdue ? 'text-rose-400' : 'text-amber-400'
                           }`}
                         >
                           {isCleared ? 'خالص' : `${cust.balance} ${storeConfig.currency}`}
@@ -750,7 +773,7 @@ export default function LuxuryStoreLedgerApp() {
                       {/* Delete Customer Button */}
                       <button
                         onClick={(e) => handleDeleteCustomer(cust.id, cust.name, e)}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
                         title="حذف الزبون"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -791,7 +814,7 @@ export default function LuxuryStoreLedgerApp() {
                           href={getCustomerStatementWhatsAppUrl()}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30 transition-all shadow-xs"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/30 transition-all shadow-xs"
                           title="فتح محادثة واتساب فورية"
                         >
                           <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
@@ -827,7 +850,7 @@ export default function LuxuryStoreLedgerApp() {
 
                 {/* Primary Action Buttons: Settle Debt, Add Debt, Barcode/QR, WhatsApp */}
                 <div className="flex flex-wrap items-center gap-2.5 pt-4">
-                  {/* Settle Debt Button */}
+                  {/* Settle Debt Button (with Cashier Sound!) */}
                   <button
                     onClick={() => {
                       if (selectedCustomer.balance <= 0) {
@@ -837,14 +860,14 @@ export default function LuxuryStoreLedgerApp() {
                       setPosMode('REPAYMENT');
                       setPosAmount('0');
                     }}
-                    className={`flex-1 sm:flex-none font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-all ${
+                    className={`flex-1 sm:flex-none font-black px-4.5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all ${
                       selectedCustomer.balance <= 0
                         ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50 shadow-none'
-                        : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/25'
                     }`}
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>{selectedCustomer.balance <= 0 ? 'خالص (لا يوجد دين)' : 'سداد دفعة نقدية'}</span>
+                    <span>{selectedCustomer.balance <= 0 ? 'خالص (لا يوجد دين)' : 'سداد دفعة نقدية 🔔'}</span>
                   </button>
 
                   {/* Add Debt Button */}
@@ -853,7 +876,7 @@ export default function LuxuryStoreLedgerApp() {
                       setPosMode('DEBT');
                       setPosAmount('0');
                     }}
-                    className="flex-1 sm:flex-none bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+                    className="flex-1 sm:flex-none bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4.5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
                   >
                     <PlusCircle className="w-4 h-4" />
                     <span>تسجيل دين بضاعة</span>
@@ -874,7 +897,7 @@ export default function LuxuryStoreLedgerApp() {
                     href={getCustomerStatementWhatsAppUrl()}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-500 text-white font-black px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/25 active:scale-95 transition-all"
+                    className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-500 text-white font-black px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 active:scale-95 transition-all"
                     title="إرسال كشف الحساب والرصيد المستحق للزبون عبر واتساب"
                   >
                     <Share2 className="w-4 h-4" />
@@ -919,14 +942,14 @@ export default function LuxuryStoreLedgerApp() {
                     customerTransactions.map((tx) => (
                       <div
                         key={tx.id}
-                        className={`p-3 rounded-2xl border flex items-center justify-between text-xs transition-all ${
+                        className={`p-3.5 rounded-2xl border flex items-center justify-between text-xs transition-all ${
                           tx.type === 'REPAYMENT'
                             ? isDark
-                              ? 'bg-emerald-950/20 border-emerald-500/20'
-                              : 'bg-emerald-50/50 border-emerald-200'
+                              ? 'bg-emerald-950/20 border-emerald-500/25'
+                              : 'bg-emerald-50/60 border-emerald-200'
                             : isDark
-                            ? 'bg-amber-950/20 border-amber-500/20'
-                            : 'bg-amber-50/50 border-amber-200'
+                            ? 'bg-amber-950/20 border-amber-500/25'
+                            : 'bg-amber-50/60 border-amber-200'
                         }`}
                       >
                         <div className="flex items-center gap-3">
@@ -1006,17 +1029,18 @@ export default function LuxuryStoreLedgerApp() {
               </div>
             </>
           ) : (
-            <div className={`p-12 rounded-3xl border text-center flex flex-col items-center justify-center gap-3 ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
-              <Users className="w-12 h-12 text-slate-600" />
+            <div className={`p-14 rounded-3xl border text-center flex flex-col items-center justify-center gap-3 ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
+              <Users className="w-14 h-14 text-slate-600" />
               <h3 className="font-bold text-sm">اختر زبوناً من القائمة لعرض كشف الحساب</h3>
+              <p className="text-xs text-slate-400">أو اضغط على «زبون جديد» لإضافة حساب جديد إلى الدفتر.</p>
             </div>
           )}
         </section>
       </main>
 
-      {/* POS Keypad Modal (Smart Numpad with Strict Boundary Constraints) */}
+      {/* POS Keypad Modal (Tactile Cashier Terminal) */}
       {posMode && selectedCustomer && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className={`w-full max-w-sm rounded-3xl p-5 flex flex-col gap-4 shadow-2xl border ${
             isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
           }`}>
@@ -1045,14 +1069,14 @@ export default function LuxuryStoreLedgerApp() {
                   {/* Amount Display */}
                   <div className={`p-4 rounded-2xl text-center border transition-all ${
                     isOverpaying
-                      ? 'bg-red-500/10 border-red-500/50'
+                      ? 'bg-rose-500/10 border-rose-500/50'
                       : isDark
                       ? 'bg-slate-950 border-slate-800'
                       : 'bg-slate-50 border-slate-200'
                   }`}>
                     <span className="text-[10px] text-slate-400 block mb-1">المبلغ المراد تسجيله:</span>
                     <div className="text-3xl font-black font-mono flex items-center justify-center gap-1.5">
-                      <span className={isOverpaying ? 'text-red-400' : isDark ? 'text-white' : 'text-slate-900'}>
+                      <span className={isOverpaying ? 'text-rose-400' : isDark ? 'text-white' : 'text-slate-900'}>
                         {posAmount}
                       </span>
                       <span className="text-sm font-bold text-amber-400">{storeConfig.currency}</span>
@@ -1061,7 +1085,7 @@ export default function LuxuryStoreLedgerApp() {
                     {posMode === 'REPAYMENT' && (
                       <div className="mt-2 text-[11px] flex justify-between px-2 pt-2 border-t border-slate-800/60">
                         <span className="text-slate-400">الدين الحالي: {selectedCustomer.balance} {storeConfig.currency}</span>
-                        <span className={`font-bold ${isOverpaying ? 'text-red-400' : 'text-emerald-400'}`}>
+                        <span className={`font-bold ${isOverpaying ? 'text-rose-400' : 'text-emerald-400'}`}>
                           المتبقي بعد السداد: {remainingAfterRepay} {storeConfig.currency}
                         </span>
                       </div>
@@ -1069,7 +1093,7 @@ export default function LuxuryStoreLedgerApp() {
                   </div>
 
                   {isOverpaying && (
-                    <div className="p-2.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-[11px] font-bold flex items-center gap-2">
+                    <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 text-[11px] font-bold flex items-center gap-2">
                       <AlertCircle className="w-4 h-4 shrink-0" />
                       <span>مبلغ السداد يتجاوز إجمالي الدين المستحق ({selectedCustomer.balance} {storeConfig.currency})!</span>
                     </div>
@@ -1104,9 +1128,9 @@ export default function LuxuryStoreLedgerApp() {
                       <button
                         key={key}
                         onClick={() => handleKeypadPress(key)}
-                        className={`py-3 rounded-xl border transition-all active:scale-90 flex items-center justify-center font-bold text-base ${
+                        className={`py-3.5 rounded-xl border transition-all active:scale-90 flex items-center justify-center font-bold text-base ${
                           key === 'CLEAR'
-                            ? 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30 text-xs font-sans'
+                            ? 'bg-rose-500/20 text-rose-400 border-rose-500/30 hover:bg-rose-500/30 text-xs font-sans'
                             : key === 'BACK'
                             ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 text-xs font-sans'
                             : isDark
@@ -1125,14 +1149,14 @@ export default function LuxuryStoreLedgerApp() {
                     placeholder="بيان العملية (مثال: طحين، معلبات، كاش...)"
                     value={posDetails}
                     onChange={(e) => setPosDetails(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-emerald-500"
                   />
 
                   {/* Confirm Button */}
                   <button
                     onClick={handleExecutePosTransaction}
                     disabled={enteredAmount <= 0 || isOverpaying}
-                    className={`w-full py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
+                    className={`w-full py-3.5 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
                       enteredAmount <= 0 || isOverpaying
                         ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50 shadow-none'
                         : posMode === 'REPAYMENT'
@@ -1142,7 +1166,7 @@ export default function LuxuryStoreLedgerApp() {
                   >
                     <CheckCircle2 className="w-5 h-5" />
                     <span>
-                      {isOverpaying ? `غير مسموح بسداد أكثر من الدين` : 'تأكيد واستخراج كود السند والباركود'}
+                      {isOverpaying ? `غير مسموح بسداد أكثر من الدين` : posMode === 'REPAYMENT' ? 'تأكيد السداد وقبض الكاش 🔔' : 'تأكيد وحفظ الدين بالدفتر'}
                     </span>
                   </button>
                 </>
@@ -1282,7 +1306,7 @@ export default function LuxuryStoreLedgerApp() {
                       );
                     }
                     return (
-                      <span className="text-[9px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
+                      <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
                         رقم غير مكتمل
                       </span>
                     );
@@ -1296,7 +1320,7 @@ export default function LuxuryStoreLedgerApp() {
                   onChange={(e) => setNewCustPhone(e.target.value)}
                   className={`w-full rounded-xl px-3 py-2 text-xs outline-none font-mono border transition-all ${
                     newCustPhone.length > 0 && !validatePalestinianPhone(newCustPhone).isValid
-                      ? 'border-red-500/60 bg-red-500/5 text-red-200'
+                      ? 'border-rose-500/60 bg-rose-500/5 text-rose-200'
                       : 'bg-slate-950 border-slate-800 text-white focus:border-emerald-500'
                   }`}
                 />
@@ -1340,7 +1364,7 @@ export default function LuxuryStoreLedgerApp() {
                     !validatePalestinianPhone(newCustPhone).isValid ||
                     !!customers.find((c) => c.phone === validatePalestinianPhone(newCustPhone).normalized)
                       ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50 shadow-none'
-                      : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20 active:scale-95'
+                      : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20 active:scale-95'
                   }`}
                 >
                   حفظ وتسجيل الزبون
