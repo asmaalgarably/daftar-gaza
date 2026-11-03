@@ -70,14 +70,11 @@ export function DaftarLogo({ className = '', size = 36, showText = true }: LogoP
       {showText && (
         <div className="flex flex-col">
           <div className="flex items-center gap-1.5">
-            <span className="text-lg font-black tracking-tight text-white dark:text-white leading-none">
+            <span className="text-xl font-black tracking-tight text-white dark:text-white leading-none">
               دَفْتَر
             </span>
-            <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-              POS
-            </span>
           </div>
-          <span className="text-[10px] text-slate-400 font-medium leading-tight mt-0.5">
+          <span className="text-[10px] text-slate-400 font-medium leading-tight mt-1">
             دفتر ديون وسداد الزبائن
           </span>
         </div>
