@@ -129,17 +129,20 @@ export default function LuxuryStoreLedgerApp() {
   }, [customers, selectedCustomerId]);
 
   // Store Analytics
-  const totalOutstandingBalance = customers.reduce((sum, c) => sum + c.balance, 0);
-  const activeDebtorsCount = customers.filter((c) => c.balance > 0).length;
-  const overdueCount = customers.filter((c) => c.balance > c.debtCeiling).length;
+  const totalOutstandingBalance = (customers || []).reduce((sum, c) => sum + (c?.balance || 0), 0);
+  const activeDebtorsCount = (customers || []).filter((c) => (c?.balance || 0) > 0).length;
+  const overdueCount = (customers || []).filter((c) => (c?.balance || 0) > (c?.debtCeiling || 0)).length;
 
   // Filter customers
-  const filteredCustomers = customers.filter((c) => {
-    const matchesSearch = c.name.includes(searchTerm) || c.phone.includes(searchTerm);
+  const filteredCustomers = (customers || []).filter((c) => {
+    if (!c) return false;
+    const name = c.name || '';
+    const phone = c.phone || '';
+    const matchesSearch = name.includes(searchTerm) || phone.includes(searchTerm);
     if (!matchesSearch) return false;
-    if (customerFilter === 'DEBTORS') return c.balance > 0;
-    if (customerFilter === 'CLEARED') return c.balance === 0;
-    if (customerFilter === 'OVERDUE') return c.balance > c.debtCeiling;
+    if (customerFilter === 'DEBTORS') return (c.balance || 0) > 0;
+    if (customerFilter === 'CLEARED') return (c.balance || 0) === 0;
+    if (customerFilter === 'OVERDUE') return (c.balance || 0) > (c.debtCeiling || 0);
     return true;
   });
 
@@ -550,10 +553,10 @@ export default function LuxuryStoreLedgerApp() {
             </div>
             <div className="flex items-baseline gap-2 my-2.5">
               <span className="text-3xl font-black text-amber-400 font-mono tracking-tight">
-                {totalOutstandingBalance.toLocaleString()}
+                {totalOutstandingBalance}
               </span>
               <span className="text-[11px] font-bold text-amber-400/90 bg-amber-500/10 px-2.5 py-0.5 rounded-md border border-amber-500/20">
-                {storeConfig.currency} شيكل
+                {storeConfig?.currency || '₪'} شيكل
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
@@ -700,7 +703,7 @@ export default function LuxuryStoreLedgerApp() {
                 }`}
               >
                 <span>خالص</span>
-                <span className="opacity-80 font-mono">({customers.filter((c) => c.balance === 0).length})</span>
+                <span className="opacity-80 font-mono">({(customers || []).filter((c) => (c?.balance || 0) === 0).length})</span>
               </button>
             </div>
           </div>
@@ -760,7 +763,7 @@ export default function LuxuryStoreLedgerApp() {
                             : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                         }`}
                       >
-                        {cust.name.slice(0, 1)}
+                        {(cust.name || 'ز').slice(0, 1)}
                       </div>
 
                       <div className="flex flex-col">
@@ -829,7 +832,7 @@ export default function LuxuryStoreLedgerApp() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/60">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-black flex items-center justify-center text-lg shadow-lg">
-                      {selectedCustomer.name.slice(0, 1)}
+                      {(selectedCustomer.name || 'ز').slice(0, 1)}
                     </div>
                     <div>
                       <h2 className={`text-base font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>

@@ -37,21 +37,19 @@ export default function RootLayout({
           {children}
         </div>
 
-        {/* PWA Service Worker Registration (Production Only) */}
+        {/* Cache Busting & Service Worker Cleanup to prevent ChunkLoadError */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator) {
-                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                  // Clean unregister on dev to prevent any localhost caching freezes
-                  navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                    for (var r of registrations) { r.unregister(); }
-                  });
-                } else {
-                  window.addEventListener('load', function() {
-                    navigator.serviceWorker.register('/sw.js').catch(function() {});
-                  });
-                }
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                  for (var r of registrations) { r.unregister(); }
+                });
+              }
+              if ('caches' in window) {
+                caches.keys().then(function(names) {
+                  for (var name of names) { caches.delete(name); }
+                });
               }
             `,
           }}
