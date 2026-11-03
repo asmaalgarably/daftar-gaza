@@ -33,17 +33,30 @@ export function StoreSettingsModal({
   triggerToast,
 }: StoreSettingsModalProps) {
   const [tab, setTab] = useState<'profile' | 'backup'>('profile');
+  const [isConfirmingReset, setIsConfirmingReset] = useState(false);
 
   // Form State
-  const [storeName, setStoreName] = useState(config.storeName);
-  const [ownerName, setOwnerName] = useState(config.ownerName);
-  const [phone, setPhone] = useState(config.phone);
-  const [location, setLocation] = useState(config.location);
-  const [currency, setCurrency] = useState(config.currency);
-  const [receiptFooter, setReceiptFooter] = useState(config.receiptFooter);
+  const [storeName, setStoreName] = useState(config?.storeName || '');
+  const [ownerName, setOwnerName] = useState(config?.ownerName || '');
+  const [phone, setPhone] = useState(config?.phone || '');
+  const [location, setLocation] = useState(config?.location || '');
+  const [currency, setCurrency] = useState(config?.currency || '₪');
+  const [receiptFooter, setReceiptFooter] = useState(config?.receiptFooter || '');
 
   // Backup file input ref
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Sync form state when config changes
+  React.useEffect(() => {
+    if (config) {
+      setStoreName(config.storeName || '');
+      setOwnerName(config.ownerName || '');
+      setPhone(config.phone || '');
+      setLocation(config.location || '');
+      setCurrency(config.currency || '₪');
+      setReceiptFooter(config.receiptFooter || '');
+    }
+  }, [config]);
 
   if (!isOpen) return null;
 
@@ -95,8 +108,6 @@ export function StoreSettingsModal({
     };
     reader.readAsText(file);
   };
-
-  const [isConfirmingReset, setIsConfirmingReset] = useState(false);
 
   const handleZeroOutConfirm = async () => {
     if (!isConfirmingReset) {
