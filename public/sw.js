@@ -1,5 +1,5 @@
 // Daftar Clean PWA Service Worker (Production-Optimized, Safe Caching)
-const CACHE_NAME = 'daftar-v3';
+const CACHE_NAME = 'daftar-v5';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

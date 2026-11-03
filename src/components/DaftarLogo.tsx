@@ -69,9 +69,12 @@ export function DaftarLogo({ className = '', size = 36, showText = true }: LogoP
 
       {showText && (
         <div className="flex flex-col">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <span className="text-xl font-black tracking-tight text-white dark:text-white leading-none">
               دَفْتَر
+            </span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 whitespace-nowrap">
+              حسابات المحل
             </span>
           </div>
           <span className="text-[10px] text-slate-400 font-medium leading-tight mt-1">
