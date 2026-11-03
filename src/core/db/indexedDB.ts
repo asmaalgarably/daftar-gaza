@@ -44,7 +44,18 @@ class DaftarDatabase {
         return;
       }
 
+      const timeout = setTimeout(() => {
+        if (!this.db) {
+          console.warn('IndexedDB open timed out');
+          reject(new Error('IndexedDB timeout'));
+        }
+      }, 1500);
+
       const request = window.indexedDB.open(DB_NAME, DB_VERSION);
+
+      request.onblocked = () => {
+        console.warn('IndexedDB open was blocked by another tab');
+      };
 
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
@@ -72,12 +83,18 @@ class DaftarDatabase {
       };
 
       request.onsuccess = async (event) => {
+        clearTimeout(timeout);
         this.db = (event.target as IDBOpenDBRequest).result;
+        this.db.onversionchange = () => {
+          this.db?.close();
+          this.db = null;
+        };
         await this.seedInitialStoreConfigIfEmpty(this.db);
         resolve(this.db);
       };
 
       request.onerror = (event) => {
+        clearTimeout(timeout);
         reject((event.target as IDBOpenDBRequest).error);
       };
     });

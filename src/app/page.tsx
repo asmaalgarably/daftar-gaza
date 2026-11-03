@@ -65,6 +65,10 @@ export default function LuxuryStoreLedgerApp() {
   const [searchTerm, setSearchTerm] = useState('');
   const [customerFilter, setCustomerFilter] = useState<'ALL' | 'DEBTORS' | 'CLEARED' | 'OVERDUE'>('ALL');
 
+  // Delete and Zero Out non-blocking modal states
+  const [deleteConfirmCust, setDeleteConfirmCust] = useState<{ id: string; name: string } | null>(null);
+  const [showZeroOutConfirm, setShowZeroOutConfirm] = useState(false);
+
   // Modals & Features
   const [showStoreSettingsModal, setShowStoreSettingsModal] = useState(false);
   const [showCameraScanner, setShowCameraScanner] = useState(false);
@@ -337,32 +341,34 @@ export default function LuxuryStoreLedgerApp() {
     }
   };
 
-  // Delete individual customer
-  const handleDeleteCustomer = async (customerId: string, customerName: string, e?: React.MouseEvent) => {
+  // Delete individual customer (non-blocking)
+  const handleDeleteCustomer = (customerId: string, customerName: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (
-      typeof window !== 'undefined' &&
-      window.confirm(`هل أنت متأكد من حذف حساب الزبون (${customerName}) نهائياً من دفتر الديون؟`)
-    ) {
-      await deleteCustomer(customerId);
-      if (selectedCustomerId === customerId) {
-        const remaining = customers.filter((c) => c.id !== customerId);
-        setSelectedCustomerId(remaining.length > 0 ? remaining[0].id : null);
-      }
-      triggerToast(`تم حذف حساب الزبون (${customerName})`);
-    }
+    setDeleteConfirmCust({ id: customerId, name: customerName });
   };
 
-  // Master ZERO-OUT: Wipes all customers and transactions completely
-  const handleDirectZeroOut = async () => {
-    if (
-      typeof window !== 'undefined' &&
-      window.confirm('هل أنت متأكد من تصفير الدفتر بالكامل ومسح كافة الزبائن والديون (0 زبائن)؟')
-    ) {
-      await clearAllLedgerData();
-      setSelectedCustomerId(null);
-      triggerToast('تم تصفير الدفتر بالكامل، السجل فارغ الآن (0 زبائن) ✓');
+  const confirmDeleteAction = async () => {
+    if (!deleteConfirmCust) return;
+    const { id, name } = deleteConfirmCust;
+    await deleteCustomer(id);
+    if (selectedCustomerId === id) {
+      const remaining = customers.filter((c) => c.id !== id);
+      setSelectedCustomerId(remaining.length > 0 ? remaining[0].id : null);
     }
+    setDeleteConfirmCust(null);
+    triggerToast(`تم حذف حساب الزبون (${name})`);
+  };
+
+  // Master ZERO-OUT (non-blocking)
+  const handleDirectZeroOut = () => {
+    setShowZeroOutConfirm(true);
+  };
+
+  const confirmZeroOutAction = async () => {
+    await clearAllLedgerData();
+    setSelectedCustomerId(null);
+    setShowZeroOutConfirm(false);
+    triggerToast('تم تصفير الدفتر بالكامل، السجل فارغ الآن (0 زبائن) ✓');
   };
 
   const isDark = themeMode === 'LUXURY';
@@ -395,7 +401,7 @@ export default function LuxuryStoreLedgerApp() {
           if (decodedText.startsWith('http')) {
             window.open(decodedText, '_blank');
           } else {
-            alert(`بيانات السند الممسوح: ${decodedText}`);
+            triggerToast(`بيانات السند الممسوح: ${decodedText}`);
           }
         }}
       />
@@ -1378,6 +1384,64 @@ export default function LuxuryStoreLedgerApp() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Non-blocking Delete Customer Confirmation Modal */}
+      {deleteConfirmCust && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-xs rounded-3xl bg-slate-900 border border-slate-800 p-5 flex flex-col gap-3 text-center text-white shadow-2xl animate-in zoom-in-95">
+            <div className="w-10 h-10 rounded-full bg-rose-500/10 text-rose-400 mx-auto flex items-center justify-center">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <h3 className="font-bold text-sm">حذف حساب الزبون</h3>
+            <p className="text-xs text-slate-400">
+              هل أنت متأكد من حذف حساب الزبون ({deleteConfirmCust.name}) وكافة معاملاته من الدفتر؟
+            </p>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={confirmDeleteAction}
+                className="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 rounded-xl text-xs active:scale-95 transition-all"
+              >
+                نعم، احذف
+              </button>
+              <button
+                onClick={() => setDeleteConfirmCust(null)}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Non-blocking Master Zero-Out Confirmation Modal */}
+      {showZeroOutConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-xs rounded-3xl bg-slate-900 border border-slate-800 p-5 flex flex-col gap-3 text-center text-white shadow-2xl animate-in zoom-in-95">
+            <div className="w-10 h-10 rounded-full bg-rose-500/10 text-rose-400 mx-auto flex items-center justify-center">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <h3 className="font-bold text-sm">تصفير الدفتر بالكامل</h3>
+            <p className="text-xs text-slate-400">
+              سيتم مسح جميع الزبائن وكافة الديون والبدء بسجل فارغ تماماً (0 زبائن). هل تريد المتابعة؟
+            </p>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={confirmZeroOutAction}
+                className="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 rounded-xl text-xs shadow-md shadow-rose-600/25 active:scale-95 transition-all"
+              >
+                تأكيد التصفير (0)
+              </button>
+              <button
+                onClick={() => setShowZeroOutConfirm(false)}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs"
+              >
+                إلغاء
+              </button>
+            </div>
           </div>
         </div>
       )}

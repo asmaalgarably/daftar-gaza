@@ -1,20 +1,7 @@
-// Daftar Offline Service Worker
-const CACHE_NAME = 'daftar-cache-v2';
-const STATIC_ASSETS = [
-  '/',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png',
-];
+// Daftar Clean PWA Service Worker (Production-Optimized, Safe Caching)
+const CACHE_NAME = 'daftar-v3';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return Promise.allSettled(
-        STATIC_ASSETS.map((url) => cache.add(url).catch((err) => console.log('SW cache skip:', url, err)))
-      );
-    })
-  );
   self.skipWaiting();
 });
 
@@ -28,18 +15,31 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // Never intercept non-GET, WebSockets, Next.js dev server, HMR, or chrome extensions
+  if (
+    event.request.method !== 'GET' ||
+    url.pathname.startsWith('/_next/') ||
+    url.pathname.includes('webpack') ||
+    url.protocol.startsWith('chrome') ||
+    url.protocol === 'ws:' ||
+    url.protocol === 'wss:'
+  ) {
+    return;
+  }
+
+  // Network-First with safe fallback (NEVER hangs the page)
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request).catch(() => {
-        // Fallback for offline usage
-        return caches.match('/');
-      });
+    fetch(event.request).catch(async () => {
+      const cached = await caches.match(event.request);
+      if (cached) return cached;
+      return new Response('Offline', { status: 503, statusText: 'Offline' });
     })
   );
 });

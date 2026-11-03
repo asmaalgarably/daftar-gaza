@@ -37,16 +37,21 @@ export default function RootLayout({
           {children}
         </div>
 
-        {/* PWA Service Worker Registration */}
+        {/* PWA Service Worker Registration (Production Only) */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                  navigator.serviceWorker.register('/sw.js').catch((err) => {
-                    console.log('Service Worker registration:', err);
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                  // Clean unregister on dev to prevent any localhost caching freezes
+                  navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    for (var r of registrations) { r.unregister(); }
                   });
-                });
+                } else {
+                  window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/sw.js').catch(function() {});
+                  });
+                }
               }
             `,
           }}

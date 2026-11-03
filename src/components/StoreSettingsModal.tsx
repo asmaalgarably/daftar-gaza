@@ -96,12 +96,17 @@ export function StoreSettingsModal({
     reader.readAsText(file);
   };
 
+  const [isConfirmingReset, setIsConfirmingReset] = useState(false);
+
   const handleZeroOutConfirm = async () => {
-    if (window.confirm('هل أنت متأكد من تصفير الدفتر ومسح كافة الزبائن والديون نهائياً للبدء من الصفر؟')) {
-      await onClearAllData();
-      triggerToast('تم تصفير الدفتر بالكامل، السجل أصبح فارغاً تماماً (0 زبائن) ✓');
-      onClose();
+    if (!isConfirmingReset) {
+      setIsConfirmingReset(true);
+      setTimeout(() => setIsConfirmingReset(false), 4000);
+      return;
     }
+    await onClearAllData();
+    triggerToast('تم تصفير الدفتر بالكامل، السجل أصبح فارغاً تماماً (0 زبائن) ✓');
+    onClose();
   };
 
   return (
@@ -267,10 +272,14 @@ export function StoreSettingsModal({
               <button
                 type="button"
                 onClick={handleZeroOutConfirm}
-                className="w-full bg-rose-600 hover:bg-rose-500 text-white font-black py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md shadow-rose-600/20 active:scale-95"
+                className={`w-full font-black py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 ${
+                  isConfirmingReset
+                    ? 'bg-rose-700 text-white animate-pulse'
+                    : 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20'
+                }`}
               >
                 <Trash2 className="w-4 h-4" />
-                تصفير الدفتر الآن (حذف الكل)
+                {isConfirmingReset ? 'اضغط هنا مرة أخرى لتأكيد تصفير الدفتر' : 'تصفير الدفتر الآن (حذف الكل)'}
               </button>
             </div>
           </div>

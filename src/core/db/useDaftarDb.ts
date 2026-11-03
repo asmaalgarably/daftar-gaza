@@ -30,14 +30,22 @@ export function useDaftarDb() {
   useEffect(() => {
     let mounted = true;
 
+    // Safety watchdog: ensure UI never hangs on loading screen
+    const watchdog = setTimeout(() => {
+      if (mounted) setIsReady(true);
+    }, 700);
+
     async function init() {
       try {
         await refresh();
-        if (mounted) setIsReady(true);
+        if (mounted) {
+          clearTimeout(watchdog);
+          setIsReady(true);
+        }
       } catch (err: unknown) {
         if (mounted) {
-          const message = err instanceof Error ? err.message : 'خطأ في تهيئة قاعدة البيانات';
-          setError(message);
+          clearTimeout(watchdog);
+          setIsReady(true);
         }
       }
     }
@@ -50,6 +58,7 @@ export function useDaftarDb() {
 
     return () => {
       mounted = false;
+      clearTimeout(watchdog);
       unsubscribe();
     };
   }, [refresh]);
