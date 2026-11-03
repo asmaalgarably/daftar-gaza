@@ -541,18 +541,18 @@ export default function LuxuryStoreLedgerApp() {
       <section className="max-w-7xl mx-auto w-full px-4 lg:px-8 pt-5">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4">
           {/* Card 1: Outstanding Debt */}
-          <div className={`p-4.5 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
-            <div className="flex justify-between items-center">
+          <div className={`p-5 sm:p-6 rounded-2xl sm:rounded-3xl border overflow-hidden transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
+            <div className="flex justify-between items-center mb-1">
               <span className="text-xs font-bold text-slate-400">إجمالي ديون المحل</span>
               <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0 border border-amber-500/20">
                 <Wallet className="w-4 h-4" />
               </div>
             </div>
-            <div className="flex items-baseline gap-2 my-2">
+            <div className="flex items-baseline gap-2 my-2.5">
               <span className="text-3xl font-black text-amber-400 font-mono tracking-tight">
                 {totalOutstandingBalance.toLocaleString()}
               </span>
-              <span className="text-[11px] font-bold text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+              <span className="text-[11px] font-bold text-amber-400/90 bg-amber-500/10 px-2.5 py-0.5 rounded-md border border-amber-500/20">
                 {storeConfig.currency} شيكل
               </span>
             </div>
@@ -562,18 +562,18 @@ export default function LuxuryStoreLedgerApp() {
           </div>
 
           {/* Card 2: Debtors Count */}
-          <div className={`p-4.5 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
-            <div className="flex justify-between items-center">
+          <div className={`p-5 sm:p-6 rounded-2xl sm:rounded-3xl border overflow-hidden transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
+            <div className="flex justify-between items-center mb-1">
               <span className="text-xs font-bold text-slate-400">زبائن عليهم ديون حالية</span>
               <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20">
                 <Users className="w-4 h-4" />
               </div>
             </div>
-            <div className="flex items-baseline gap-2 my-2">
+            <div className="flex items-baseline gap-2 my-2.5">
               <span className="text-3xl font-black text-emerald-400 font-mono tracking-tight">
                 {activeDebtorsCount}
               </span>
-              <span className="text-[11px] font-bold text-emerald-400/90 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+              <span className="text-[11px] font-bold text-emerald-400/90 bg-emerald-500/10 px-2.5 py-0.5 rounded-md border border-emerald-500/20">
                 زبون
               </span>
             </div>
@@ -583,18 +583,18 @@ export default function LuxuryStoreLedgerApp() {
           </div>
 
           {/* Card 3: Overdue Alert Count */}
-          <div className={`p-4.5 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
-            <div className="flex justify-between items-center">
+          <div className={`p-5 sm:p-6 rounded-2xl sm:rounded-3xl border overflow-hidden transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
+            <div className="flex justify-between items-center mb-1">
               <span className="text-xs font-bold text-slate-400">تجاوز الحد الائتماني</span>
               <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center shrink-0 border border-rose-500/20">
                 <AlertCircle className="w-4 h-4" />
               </div>
             </div>
-            <div className="flex items-baseline gap-2 my-2">
+            <div className="flex items-baseline gap-2 my-2.5">
               <span className="text-3xl font-black text-rose-400 font-mono tracking-tight">
                 {overdueCount}
               </span>
-              <span className="text-[11px] font-bold text-rose-400/90 bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/20">
+              <span className="text-[11px] font-bold text-rose-400/90 bg-rose-500/10 px-2.5 py-0.5 rounded-md border border-rose-500/20">
                 حسابات
               </span>
             </div>
@@ -894,7 +894,7 @@ export default function LuxuryStoreLedgerApp() {
                       setPosMode('REPAYMENT');
                       setPosAmount('0');
                     }}
-                    className={`flex-1 sm:flex-none font-black px-4.5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all ${
+                    className={`flex-1 sm:flex-none font-black px-5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all ${
                       selectedCustomer.balance <= 0
                         ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50 shadow-none'
                         : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/25'
@@ -910,7 +910,7 @@ export default function LuxuryStoreLedgerApp() {
                       setPosMode('DEBT');
                       setPosAmount('0');
                     }}
-                    className="flex-1 sm:flex-none bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4.5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+                    className="flex-1 sm:flex-none bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
                   >
                     <PlusCircle className="w-4 h-4" />
                     <span>تسجيل دين بضاعة</span>
