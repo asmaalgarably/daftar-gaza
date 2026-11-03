@@ -480,24 +480,24 @@ export default function LuxuryStoreLedgerApp() {
           isDark ? 'bg-slate-950/85 border-slate-800/80 shadow-sm' : 'bg-white/95 border-slate-200/80 shadow-xs'
         }`}
       >
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
           {/* Logo & Store Profile */}
-          <div className="flex items-center gap-3">
-            <DaftarLogo size={38} showText={true} />
-            <div className={`h-6 w-px hidden sm:block ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
-            <div className="hidden sm:flex flex-col">
-              <span className={`text-xs font-black flex items-center gap-1.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                <Store className="w-3.5 h-3.5 text-emerald-500" />
-                {storeConfig.storeName}
+          <div className="flex items-center gap-3 min-w-0">
+            <DaftarLogo size={40} showText={true} />
+            <div className={`h-7 w-px hidden md:block shrink-0 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+            <div className="hidden md:flex flex-col min-w-0">
+              <span className={`text-xs font-black flex items-center gap-1.5 truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                <Store className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span className="truncate">{storeConfig.storeName}</span>
               </span>
-              <span className="text-[11px] text-slate-400">
+              <span className="text-[11px] text-slate-400 truncate">
                 {storeConfig.ownerName} • {storeConfig.location}
               </span>
             </div>
           </div>
 
           {/* Controls & Action Buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {/* Camera QR Scanner */}
             <button
               onClick={() => setShowCameraScanner(true)}
@@ -539,50 +539,68 @@ export default function LuxuryStoreLedgerApp() {
 
       {/* Metrics Banner */}
       <section className="max-w-7xl mx-auto w-full px-4 lg:px-8 pt-5">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4">
           {/* Card 1: Outstanding Debt */}
           <div className={`p-4.5 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
-            <div className="flex justify-between items-start">
+            <div className="flex justify-between items-center">
               <span className="text-xs font-bold text-slate-400">إجمالي ديون المحل</span>
-              <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0 border border-amber-500/20">
                 <Wallet className="w-4 h-4" />
               </div>
             </div>
-            <div className="my-2">
-              <span className="text-3xl font-black text-amber-500 font-mono tracking-tight">{totalOutstandingBalance}</span>
-              <span className="text-xs font-bold text-slate-400 mr-1.5">{storeConfig.currency}</span>
+            <div className="flex items-baseline gap-2 my-2">
+              <span className="text-3xl font-black text-amber-400 font-mono tracking-tight">
+                {totalOutstandingBalance.toLocaleString()}
+              </span>
+              <span className="text-[11px] font-bold text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                {storeConfig.currency} شيكل
+              </span>
             </div>
-            <p className="text-[11px] text-slate-400">في ذمة {activeDebtorsCount} زبائن حتى الآن</p>
+            <p className="text-[11px] text-slate-400">
+              مستحقة في ذمة {activeDebtorsCount} زبائن حتى الآن
+            </p>
           </div>
 
           {/* Card 2: Debtors Count */}
           <div className={`p-4.5 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
-            <div className="flex justify-between items-start">
+            <div className="flex justify-between items-center">
               <span className="text-xs font-bold text-slate-400">زبائن عليهم ديون حالية</span>
-              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20">
                 <Users className="w-4 h-4" />
               </div>
             </div>
-            <div className="my-2">
-              <span className="text-3xl font-black text-emerald-400 font-mono tracking-tight">{activeDebtorsCount}</span>
-              <span className="text-xs font-bold text-slate-400 mr-1.5">زبون</span>
+            <div className="flex items-baseline gap-2 my-2">
+              <span className="text-3xl font-black text-emerald-400 font-mono tracking-tight">
+                {activeDebtorsCount}
+              </span>
+              <span className="text-[11px] font-bold text-emerald-400/90 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                زبون
+              </span>
             </div>
-            <p className="text-[11px] text-slate-400">من إجمالي {customers.length} زبون بالدفتر</p>
+            <p className="text-[11px] text-slate-400">
+              من إجمالي {customers.length} زبائن مسجلين بالدفتر
+            </p>
           </div>
 
           {/* Card 3: Overdue Alert Count */}
           <div className={`p-4.5 rounded-3xl border transition-all ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
-            <div className="flex justify-between items-start">
-              <span className="text-xs font-bold text-slate-400">تجاوز سقف الدين</span>
-              <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-slate-400">تجاوز الحد الائتماني</span>
+              <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center shrink-0 border border-rose-500/20">
                 <AlertCircle className="w-4 h-4" />
               </div>
             </div>
-            <div className="my-2">
-              <span className="text-3xl font-black text-rose-400 font-mono tracking-tight">{overdueCount}</span>
-              <span className="text-xs font-bold text-slate-400 mr-1.5">حالات</span>
+            <div className="flex items-baseline gap-2 my-2">
+              <span className="text-3xl font-black text-rose-400 font-mono tracking-tight">
+                {overdueCount}
+              </span>
+              <span className="text-[11px] font-bold text-rose-400/90 bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/20">
+                حسابات
+              </span>
             </div>
-            <p className="text-[11px] text-rose-400/90 font-medium">تجاوزت الحد الائتماني المسموح</p>
+            <p className="text-[11px] text-rose-400/90 font-medium">
+              تخطت سقف الدين المحدد لها
+            </p>
           </div>
         </div>
       </section>
@@ -640,39 +658,49 @@ export default function LuxuryStoreLedgerApp() {
             <div className={`grid grid-cols-4 gap-1 p-1 rounded-xl text-[10px] font-bold ${isDark ? 'bg-slate-950/80' : 'bg-slate-100'}`}>
               <button
                 onClick={() => setCustomerFilter('ALL')}
-                className={`py-1.5 rounded-lg transition-all ${
+                className={`py-1.5 rounded-lg transition-all flex items-center justify-center gap-1 ${
                   customerFilter === 'ALL'
                     ? isDark
-                      ? 'bg-slate-800 text-white'
+                      ? 'bg-slate-800 text-white shadow-xs'
                       : 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-400'
+                    : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                الكل ({customers.length})
+                <span>الكل</span>
+                <span className="opacity-70 font-mono">({customers.length})</span>
               </button>
               <button
                 onClick={() => setCustomerFilter('DEBTORS')}
-                className={`py-1.5 rounded-lg transition-all ${
-                  customerFilter === 'DEBTORS' ? 'bg-amber-500 text-slate-950 font-black' : 'text-slate-400'
+                className={`py-1.5 rounded-lg transition-all flex items-center justify-center gap-1 ${
+                  customerFilter === 'DEBTORS'
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                    : 'text-slate-400 hover:text-amber-400'
                 }`}
               >
-                مديونين ({activeDebtorsCount})
+                <span>مديون</span>
+                <span className="opacity-80 font-mono">({activeDebtorsCount})</span>
               </button>
               <button
                 onClick={() => setCustomerFilter('OVERDUE')}
-                className={`py-1.5 rounded-lg transition-all ${
-                  customerFilter === 'OVERDUE' ? 'bg-rose-500 text-white font-black' : 'text-slate-400'
+                className={`py-1.5 rounded-lg transition-all flex items-center justify-center gap-1 ${
+                  customerFilter === 'OVERDUE'
+                    ? 'bg-rose-500 text-white font-black shadow-xs'
+                    : 'text-slate-400 hover:text-rose-400'
                 }`}
               >
-                تجاوز ({overdueCount})
+                <span>تجاوز</span>
+                <span className="opacity-80 font-mono">({overdueCount})</span>
               </button>
               <button
                 onClick={() => setCustomerFilter('CLEARED')}
-                className={`py-1.5 rounded-lg transition-all ${
-                  customerFilter === 'CLEARED' ? 'bg-emerald-500 text-slate-950 font-black' : 'text-slate-400'
+                className={`py-1.5 rounded-lg transition-all flex items-center justify-center gap-1 ${
+                  customerFilter === 'CLEARED'
+                    ? 'bg-emerald-500 text-slate-950 font-black shadow-xs'
+                    : 'text-slate-400 hover:text-emerald-400'
                 }`}
               >
-                خالصين
+                <span>خالص</span>
+                <span className="opacity-80 font-mono">({customers.filter((c) => c.balance === 0).length})</span>
               </button>
             </div>
           </div>
@@ -1034,7 +1062,59 @@ export default function LuxuryStoreLedgerApp() {
                 </div>
               </div>
             </>
+          ) : customers.length === 0 ? (
+            /* Welcome Onboarding Canvas */
+            <div className={`p-8 sm:p-12 rounded-3xl border flex flex-col items-center text-center gap-6 ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
+              {/* Glowing Hero Icon */}
+              <div className="relative">
+                <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-emerald-600 via-teal-500 to-emerald-400 text-white flex items-center justify-center shadow-2xl shadow-emerald-500/30">
+                  <BookOpen className="w-10 h-10" />
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xs shadow-md">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+              </div>
+
+              {/* Title & Introduction */}
+              <div className="max-w-md space-y-2">
+                <h3 className={`text-xl font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  مرحباً بك في «دَفْتَر» — نقطة البيع ودفتر الديون الذكي
+                </h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  نظام كاشير مالي متكامل مصمم خصيصاً للمحلات والسوبرماركت؛ يعمل بدون إنترنت 100% مع طباعة الفواتير الحرارية وكشوفات الواتساب التلقائية.
+                </p>
+              </div>
+
+              {/* Primary Call to Action */}
+              <button
+                onClick={() => setShowNewCustomerModal(true)}
+                className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black px-7 py-3 rounded-2xl text-sm flex items-center gap-2 shadow-xl shadow-emerald-600/30 active:scale-95 transition-all"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>إضافة أول زبون والبدء الآن</span>
+              </button>
+
+              {/* 3 Value Pillars */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-xl text-right pt-4 border-t border-slate-800/60">
+                <div className="p-3 rounded-2xl bg-slate-950/40 border border-slate-800/60">
+                  <span className="text-emerald-400 text-base mb-1 block">📱</span>
+                  <h4 className="text-xs font-bold text-white mb-0.5">كشوفات الواتساب</h4>
+                  <p className="text-[10px] text-slate-400">إرسال كشف الحساب وسندات السداد مباشرة برابط مشفر.</p>
+                </div>
+                <div className="p-3 rounded-2xl bg-slate-950/40 border border-slate-800/60">
+                  <span className="text-amber-400 text-base mb-1 block">🧾</span>
+                  <h4 className="text-xs font-bold text-white mb-0.5">طابعات الفواتير</h4>
+                  <p className="text-[10px] text-slate-400">طباعة فورية متوافقة مع ورق الكاشير 58mm و 80mm.</p>
+                </div>
+                <div className="p-3 rounded-2xl bg-slate-950/40 border border-slate-800/60">
+                  <span className="text-teal-400 text-base mb-1 block">🔔</span>
+                  <h4 className="text-xs font-bold text-white mb-0.5">رنين الكاشير</h4>
+                  <p className="text-[10px] text-slate-400">صوت تك ورنين ميكانيكي مميز عند سداد وقبض الدفعات.</p>
+                </div>
+              </div>
+            </div>
           ) : (
+            /* Selected Customer Missing Canvas */
             <div className={`p-14 rounded-3xl border text-center flex flex-col items-center justify-center gap-3 ${isDark ? 'card-surface-dark' : 'card-surface-light'}`}>
               <Users className="w-14 h-14 text-slate-600" />
               <h3 className="font-bold text-sm">اختر زبوناً من القائمة لعرض كشف الحساب</h3>
